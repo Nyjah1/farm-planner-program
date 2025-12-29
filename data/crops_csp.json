@@ -1,0 +1,209 @@
+[
+  {
+    "name": "Kvieši",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 199.26,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pārtikas kvieši",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 206.79,
+    "is_market_crop": true
+  },
+  {
+    "name": "Rudzi",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 141.29,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pārtikas rudzi",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 141.51,
+    "is_market_crop": true
+  },
+  {
+    "name": "Griķi",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 278.8,
+    "is_market_crop": true
+  },
+  {
+    "name": "Mieži",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 152.57,
+    "is_market_crop": true
+  },
+  {
+    "name": "Alus mieži",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 207.43,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pārtikas mieži",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 168.54,
+    "is_market_crop": true
+  },
+  {
+    "name": "Auzas",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 191.65,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pārtikas auzas",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 209.35,
+    "is_market_crop": true
+  },
+  {
+    "name": "Tritikāle",
+    "group": "Graudaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 152.61,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pākšaugi",
+    "group": "Pākšaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 264.14,
+    "is_market_crop": true
+  },
+  {
+    "name": "Rapša sēklas",
+    "group": "Eļļaugi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 456.09,
+    "is_market_crop": true
+  },
+  {
+    "name": "Kartupeļi",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 229.81,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pārtikas kartupeļi",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 289.38,
+    "is_market_crop": true
+  },
+  {
+    "name": "Galviņkāposti",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 258.09,
+    "is_market_crop": true
+  },
+  {
+    "name": "Ziedkāposti",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 1017.5,
+    "is_market_crop": true
+  },
+  {
+    "name": "Tomāti",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 2156.75,
+    "is_market_crop": true
+  },
+  {
+    "name": "Salāti",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 4437.12,
+    "is_market_crop": true
+  },
+  {
+    "name": "Gurķi",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 2212.44,
+    "is_market_crop": true
+  },
+  {
+    "name": "Burkāni",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 358.43,
+    "is_market_crop": true
+  },
+  {
+    "name": "Sīpoli",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 351.75,
+    "is_market_crop": true
+  },
+  {
+    "name": "Galda bietes",
+    "group": "Dārzeņi",
+    "sow_months": [],
+    "yield_t_ha": {},
+    "cost_eur_ha": 0,
+    "price_eur_t": 242.48,
+    "is_market_crop": true
+  }
+]

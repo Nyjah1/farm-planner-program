@@ -1,0 +1,79 @@
+[
+  {
+    "name": "Rudzi (starpkultūra)",
+    "sow_months": [8, 9],
+    "benefits": ["N_piesaite", "nezāļu_samazināšana", "erozijas_samaz"],
+    "cost_eur_ha": 120,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Rapsis (starpkultūra)",
+    "sow_months": [8, 9],
+    "benefits": ["N_piesaite", "nezāļu_samazināšana"],
+    "cost_eur_ha": 150,
+    "allowed_after_groups": ["Graudaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Zirņi (starpkultūra)",
+    "sow_months": [7, 8],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana"],
+    "cost_eur_ha": 180,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi"]
+  },
+  {
+    "name": "Lupīnas (starpkultūra)",
+    "sow_months": [7, 8],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "nezāļu_samazināšana"],
+    "cost_eur_ha": 160,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Sējas zāles (starpkultūra)",
+    "sow_months": [8, 9, 10],
+    "benefits": ["N_piesaite", "erozijas_samaz", "augsnes_strukturēšana"],
+    "cost_eur_ha": 100,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi", "Sakņaugi"]
+  },
+  {
+    "name": "Facēlija",
+    "sow_months": [7, 8, 9],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "medusaugs", "nezāļu_samazināšana"],
+    "cost_eur_ha": 140,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Baltā sinepe",
+    "sow_months": [7, 8, 9],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "nezāļu_samazināšana"],
+    "cost_eur_ha": 130,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Eļļas rutks",
+    "sow_months": [7, 8],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "erozijas_samaz", "medusaugs"],
+    "cost_eur_ha": 145,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi"]
+  },
+  {
+    "name": "Auzas (segbiezumam)",
+    "sow_months": [7, 8, 9],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "erozijas_samaz"],
+    "cost_eur_ha": 125,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Vīķi",
+    "sow_months": [7, 8],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "nezāļu_samazināšana"],
+    "cost_eur_ha": 155,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  },
+  {
+    "name": "Griķi (kā starpkultūra)",
+    "sow_months": [6, 7, 8],
+    "benefits": ["N_piesaite", "augsnes_strukturēšana", "medusaugs", "erozijas_samaz"],
+    "cost_eur_ha": 135,
+    "allowed_after_groups": ["Graudaugi", "Eļļaugi", "Pākšaugi"]
+  }
+]

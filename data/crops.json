@@ -1,0 +1,478 @@
+[
+  {
+    "name": "Kvieši",
+    "group": "Graudaugi",
+    "sow_months": [9, 10],
+    "yield_t_ha": {
+      "smilts": 4.8,
+      "mals": 6.5,
+      "kudra": 5.8,
+      "mitra": 5.2
+    },
+    "cost_eur_ha": 520,
+    "price_eur_t": 210,
+    "is_market_crop": true
+  },
+  {
+    "name": "Rudzi",
+    "group": "Graudaugi",
+    "sow_months": [9, 10],
+    "yield_t_ha": {
+      "smilts": 4.2,
+      "mals": 5.5,
+      "kudra": 4.8,
+      "mitra": 4.6
+    },
+    "cost_eur_ha": 460,
+    "price_eur_t": 180,
+    "is_market_crop": true
+  },
+  {
+    "name": "Mieži",
+    "group": "Graudaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 4.3,
+      "mals": 5.6,
+      "kudra": 5.0,
+      "mitra": 4.7
+    },
+    "cost_eur_ha": 430,
+    "price_eur_t": 195,
+    "is_market_crop": true
+  },
+  {
+    "name": "Auzas",
+    "group": "Graudaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 3.8,
+      "mals": 5.0,
+      "kudra": 4.4,
+      "mitra": 4.2
+    },
+    "cost_eur_ha": 380,
+    "price_eur_t": 180,
+    "is_market_crop": true
+  },
+  {
+    "name": "Tritikāle",
+    "group": "Graudaugi",
+    "sow_months": [9, 10],
+    "yield_t_ha": {
+      "smilts": 4.9,
+      "mals": 6.3,
+      "kudra": 5.6,
+      "mitra": 5.0
+    },
+    "cost_eur_ha": 510,
+    "price_eur_t": 200,
+    "is_market_crop": true
+  },
+  {
+    "name": "Kukurūza (graudi)",
+    "group": "Graudaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 6.0,
+      "mals": 8.5,
+      "kudra": 7.0,
+      "mitra": 6.5
+    },
+    "cost_eur_ha": 650,
+    "price_eur_t": 220,
+    "is_market_crop": true
+  },
+  {
+    "name": "Rapsis (ziemas)",
+    "group": "Eļļaugi",
+    "sow_months": [8, 9],
+    "yield_t_ha": {
+      "smilts": 2.8,
+      "mals": 3.7,
+      "kudra": 3.2,
+      "mitra": 3.0
+    },
+    "cost_eur_ha": 540,
+    "price_eur_t": 380,
+    "is_market_crop": true
+  },
+  {
+    "name": "Rapsis (vasaras)",
+    "group": "Eļļaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 2.2,
+      "mals": 3.0,
+      "kudra": 2.6,
+      "mitra": 2.5
+    },
+    "cost_eur_ha": 520,
+    "price_eur_t": 340,
+    "is_market_crop": true
+  },
+  {
+    "name": "Lins (eļļai)",
+    "group": "Eļļaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 1.4,
+      "mals": 1.9,
+      "kudra": 1.7,
+      "mitra": 1.6
+    },
+    "cost_eur_ha": 420,
+    "price_eur_t": 420,
+    "is_market_crop": true
+  },
+  {
+    "name": "Kaņepes (sēklai)",
+    "group": "Eļļaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 0.8,
+      "mals": 1.2,
+      "kudra": 1.0,
+      "mitra": 0.9
+    },
+    "cost_eur_ha": 450,
+    "price_eur_t": 500,
+    "is_market_crop": true
+  },
+  {
+    "name": "Zirņi",
+    "group": "Pākšaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 2.6,
+      "mals": 3.6,
+      "kudra": 3.0,
+      "mitra": 2.8
+    },
+    "cost_eur_ha": 480,
+    "price_eur_t": 320,
+    "is_market_crop": true
+  },
+  {
+    "name": "Pupas",
+    "group": "Pākšaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 2.4,
+      "mals": 3.2,
+      "kudra": 2.8,
+      "mitra": 2.6
+    },
+    "cost_eur_ha": 470,
+    "price_eur_t": 350,
+    "is_market_crop": true
+  },
+  {
+    "name": "Lupīnas",
+    "group": "Pākšaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 1.8,
+      "mals": 2.6,
+      "kudra": 2.2,
+      "mitra": 2.0
+    },
+    "cost_eur_ha": 420,
+    "price_eur_t": 300,
+    "is_market_crop": true
+  },
+  {
+    "name": "Soja",
+    "group": "Pākšaugi",
+    "sow_months": [5, 6],
+    "yield_t_ha": {
+      "smilts": 2.0,
+      "mals": 2.8,
+      "kudra": 2.4,
+      "mitra": 2.2
+    },
+    "cost_eur_ha": 520,
+    "price_eur_t": 400,
+    "is_market_crop": true
+  },
+  {
+    "name": "Kartupeļi",
+    "group": "Sakņaugi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 22.0,
+      "mals": 32.0,
+      "kudra": 28.0,
+      "mitra": 26.0
+    },
+    "cost_eur_ha": 1500,
+    "price_eur_t": 120,
+    "is_market_crop": true
+  },
+  {
+    "name": "Cukurbietes",
+    "group": "Sakņaugi",
+    "sow_months": [3, 4],
+    "yield_t_ha": {
+      "smilts": 35.0,
+      "mals": 55.0,
+      "kudra": 45.0,
+      "mitra": 42.0
+    },
+    "cost_eur_ha": 1800,
+    "price_eur_t": null,
+    "is_market_crop": true
+  },
+  {
+    "name": "Sīpoli",
+    "group": "Dārzeņi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 25.0,
+      "mals": 35.0,
+      "kudra": 30.0,
+      "mitra": 28.0
+    },
+    "cost_eur_ha": 2200,
+    "price_eur_t": 150,
+    "is_market_crop": true
+  },
+  {
+    "name": "Burkāni",
+    "group": "Dārzeņi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 30.0,
+      "mals": 45.0,
+      "kudra": 38.0,
+      "mitra": 35.0
+    },
+    "cost_eur_ha": 1800,
+    "price_eur_t": 100,
+    "is_market_crop": true
+  },
+  {
+    "name": "Kāposti",
+    "group": "Dārzeņi",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 40.0,
+      "mals": 60.0,
+      "kudra": 50.0,
+      "mitra": 48.0
+    },
+    "cost_eur_ha": 2000,
+    "price_eur_t": null,
+    "is_market_crop": true
+  },
+  {
+    "name": "Facēlija",
+    "group": "Zaļmēslojums",
+    "sow_months": [4, 5, 6],
+    "yield_t_ha": {
+      "smilts": 2.0,
+      "mals": 3.0,
+      "kudra": 2.5,
+      "mitra": 2.3
+    },
+    "cost_eur_ha": 200,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Baltās sinepes",
+    "group": "Zaļmēslojums",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 1.8,
+      "mals": 2.6,
+      "kudra": 2.2,
+      "mitra": 2.0
+    },
+    "cost_eur_ha": 190,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Brūnās sinepes",
+    "group": "Zaļmēslojums",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 1.8,
+      "mals": 2.6,
+      "kudra": 2.2,
+      "mitra": 2.0
+    },
+    "cost_eur_ha": 190,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Eļļas rutks",
+    "group": "Zaļmēslojums",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 2.2,
+      "mals": 3.1,
+      "kudra": 2.7,
+      "mitra": 2.5
+    },
+    "cost_eur_ha": 210,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Auzas (starpkultūra)",
+    "group": "Zaļmēslojums",
+    "sow_months": [6, 7],
+    "yield_t_ha": {
+      "smilts": 2.0,
+      "mals": 3.0,
+      "kudra": 2.5,
+      "mitra": 2.3
+    },
+    "cost_eur_ha": 200,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Griķi (starpkultūra)",
+    "group": "Zaļmēslojums",
+    "sow_months": [6, 7],
+    "yield_t_ha": {
+      "smilts": 1.5,
+      "mals": 2.3,
+      "kudra": 1.9,
+      "mitra": 1.7
+    },
+    "cost_eur_ha": 180,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Vīķi (starpkultūra)",
+    "group": "Zaļmēslojums",
+    "sow_months": [6, 7],
+    "yield_t_ha": {
+      "smilts": 1.6,
+      "mals": 2.4,
+      "kudra": 2.0,
+      "mitra": 1.8
+    },
+    "cost_eur_ha": 200,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Daglītis",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 4.0,
+      "mals": 6.0,
+      "kudra": 5.2,
+      "mitra": 4.8
+    },
+    "cost_eur_ha": 280,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Timotiņš",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 4.5,
+      "mals": 6.5,
+      "kudra": 5.6,
+      "mitra": 5.0
+    },
+    "cost_eur_ha": 300,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Ganību airene",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 5.0,
+      "mals": 7.2,
+      "kudra": 6.0,
+      "mitra": 5.6
+    },
+    "cost_eur_ha": 320,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Daudzgadīgie zālāji (maisījums)",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 6.5,
+      "mals": 9.0,
+      "kudra": 7.8,
+      "mitra": 7.2
+    },
+    "cost_eur_ha": 340,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Sarkanais āboliņš",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 4.0,
+      "mals": 6.0,
+      "kudra": 5.0,
+      "mitra": 4.6
+    },
+    "cost_eur_ha": 260,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Baltais āboliņš",
+    "group": "Zālāji",
+    "sow_months": [4, 5, 8],
+    "yield_t_ha": {
+      "smilts": 3.5,
+      "mals": 5.5,
+      "kudra": 4.6,
+      "mitra": 4.2
+    },
+    "cost_eur_ha": 250,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Lucerna",
+    "group": "Zālāji",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 5.0,
+      "mals": 7.0,
+      "kudra": 6.0,
+      "mitra": 5.5
+    },
+    "cost_eur_ha": 330,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  },
+  {
+    "name": "Skābbarības kukurūza",
+    "group": "Zālāji",
+    "sow_months": [4, 5],
+    "yield_t_ha": {
+      "smilts": 35.0,
+      "mals": 50.0,
+      "kudra": 42.0,
+      "mitra": 40.0
+    },
+    "cost_eur_ha": 800,
+    "price_eur_t": 0,
+    "is_market_crop": false
+  }
+]

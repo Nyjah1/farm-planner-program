@@ -1,0 +1,23 @@
+{
+  "Graudaugi": {
+    "min": -15,
+    "max": 20
+  },
+  "Eļļaugi": {
+    "min": -20,
+    "max": 25
+  },
+  "Pākšaugi": {
+    "min": -10,
+    "max": 15
+  },
+  "Zālāji": {
+    "min": -5,
+    "max": 10
+  },
+  "Zaļmēslojums": {
+    "min": -30,
+    "max": 30
+  }
+}
+

@@ -1,0 +1,14 @@
+{
+  "_comment": "Oficiālās statistikas vai kooperatīvu vidējās cenas; izmanto kā fallback, ja nav publisku tirgus cenu.",
+  "Zirņi": {
+    "price_eur_t": 320,
+    "source": "CSP / Eurostat",
+    "as_of": "2024"
+  },
+  "Pupas": {
+    "price_eur_t": 350,
+    "source": "CSP / Eurostat",
+    "as_of": "2024"
+  }
+}
+
