@@ -6,7 +6,7 @@ import sys
 import io
 import os
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 # Iestatīt UTF-8 kodējumu Windows sistēmām
 if sys.platform == 'win32':
@@ -78,6 +78,17 @@ class Storage:
                     username TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL
+                )
+            """)
+            
+            # User sessions tabula
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS user_sessions (
+                    id {id_type},
+                    user_id INTEGER NOT NULL,
+                    session_token TEXT NOT NULL UNIQUE,
+                    created_at TEXT NOT NULL,
+                    expires_at TEXT NOT NULL
                 )
             """)
             
@@ -309,6 +320,77 @@ class Storage:
             
             user_id, username, password_hash, created_at = row
             return UserModel(id=user_id, username=username, password_hash=password_hash, created_at=created_at)
+    
+    def create_session(self, user_id: int, session_token: str, expires_at: str) -> bool:
+        """Izveido jaunu session ierakstu."""
+        placeholder = _get_placeholder()
+        created_at = datetime.now().isoformat()
+        
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO user_sessions (user_id, session_token, created_at, expires_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                (user_id, session_token, created_at, expires_at)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def get_session_by_token(self, session_token: str) -> Optional[Dict]:
+        """Iegūst session pēc token un pārbauda, vai tas nav beidzies."""
+        placeholder = _get_placeholder()
+        
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                f"SELECT user_id, expires_at FROM user_sessions WHERE session_token = {placeholder}",
+                (session_token,)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            user_id, expires_at_str = row
+            
+            # Pārbauda, vai session nav beidzies
+            try:
+                expires_at = datetime.fromisoformat(expires_at_str)
+                if datetime.now() > expires_at:
+                    # Session beidzies - izdzēš to
+                    self.delete_session_by_token(session_token)
+                    return None
+            except (ValueError, TypeError):
+                # Nevar parsēt datumu - uzskata par nederīgu
+                self.delete_session_by_token(session_token)
+                return None
+            
+            return {"user_id": user_id, "expires_at": expires_at_str}
+    
+    def delete_session_by_token(self, session_token: str) -> bool:
+        """Dzēš session pēc token."""
+        placeholder = _get_placeholder()
+        
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM user_sessions WHERE session_token = {placeholder}",
+                (session_token,)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
     
     def add_field(self, field: FieldModel, user_id: int) -> FieldModel:
         """Pievieno lauku datubāzē."""

@@ -27,7 +27,7 @@ from src.prices import load_prices_with_fallback, load_prices_csv
 from src.price_provider import get_price_for_crop
 from src.profit import _safe_yield_for_soil, profit_eur_detailed
 from src.analytics import crop_area_by_year
-from src.auth import login, register, logout
+from src.auth import login, register, logout, check_session_cookie
 import json
 
 # Konfigurācija - JĀBŪT PIRMAJAI Streamlit komandai
@@ -2994,11 +2994,12 @@ def show_login():
         with st.form("login_form"):
             username = st.text_input("Lietotājvārds", key="login_username")
             password = st.text_input("Parole", type="password", key="login_password")
+            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="login_remember_me")
             submit = st.form_submit_button("Pieslēgties", use_container_width=True)
             
             if submit:
                 if username and password:
-                    user = login(storage, username, password)
+                    user = login(storage, username, password, remember_me=remember_me)
                     if user:
                         st.rerun()
                     else:
@@ -3012,6 +3013,7 @@ def show_login():
             username = st.text_input("Lietotājvārds", key="signup_username")
             password = st.text_input("Parole", type="password", key="signup_password", help="Vismaz 8 simboli")
             password_repeat = st.text_input("Atkārtot paroli", type="password", key="signup_password_repeat")
+            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="signup_remember_me")
             submit = st.form_submit_button("Izveidot kontu", use_container_width=True)
             
             if submit:
@@ -3020,7 +3022,7 @@ def show_login():
                 elif password != password_repeat:
                     st.error("Paroles nesakrīt.")
                 else:
-                    user = register(storage, username, password)
+                    user = register(storage, username, password, remember_me=remember_me)
                     if user:
                         st.success("Konts izveidots veiksmīgi!")
                         st.rerun()
@@ -3049,8 +3051,13 @@ def main():
         
         # Pārbauda, vai lietotājs ir ielogojies
         if "user" not in st.session_state:
-            show_login()
-            return
+            # Mēģina atjaunot session no cookie
+            user_id = check_session_cookie(storage)
+            if user_id:
+                st.session_state["user"] = user_id
+            else:
+                show_login()
+                return
     except Exception as e:
         st.error(f"Kļūda: {e}")
         import traceback
@@ -3113,7 +3120,7 @@ def main():
             st.markdown(f"**Lietotājs:** {user.username}")
         
         if st.button("Logout", use_container_width=True, key="logout_btn"):
-            logout()
+            logout(storage)
             st.rerun()
         
         st.divider()
