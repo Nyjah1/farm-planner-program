@@ -1,7 +1,16 @@
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class UserModel(BaseModel):
+    """Lietotāja modelis."""
+    id: int
+    username: str
+    password_hash: str
+    created_at: str  # ISO format datetime string
 
 
 class SoilType(Enum):
@@ -28,6 +37,7 @@ class FieldModel(BaseModel):
     name: str
     area_ha: float = Field(gt=0, description="Lauka platība hektāros")
     soil: SoilType
+    owner_user_id: int
     block_code: Optional[str] = None
     lad_area_ha: Optional[float] = None
     lad_last_edited: Optional[str] = None  # YYYY-MM-DD
@@ -42,6 +52,7 @@ class PlantingRecord(BaseModel):
     field_id: int
     year: int
     crop: str  # Kultūras nosaukums
+    owner_user_id: int
 
 
 class CropModel(BaseModel):

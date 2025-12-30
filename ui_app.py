@@ -27,8 +27,7 @@ from src.prices import load_prices_with_fallback, load_prices_csv
 from src.price_provider import get_price_for_crop
 from src.profit import _safe_yield_for_soil, profit_eur_detailed
 from src.analytics import crop_area_by_year
-from src.auth import ensure_auth_tables, authenticate, ensure_admin_user, get_user_count, register_user, set_remember_token, validate_remember_token, clear_remember_token
-from src.cookie_manager import get_auth_cookie, set_auth_cookie, clear_auth_cookie
+from src.auth import login, register, logout
 import json
 
 # Konfigurācija - JĀBŪT PIRMAJAI Streamlit komandai
@@ -47,11 +46,6 @@ if 'debug_shown' not in st.session_state:
 if 'storage' not in st.session_state:
     try:
         st.session_state.storage = Storage()
-        # Izveido auth tabulas
-        ensure_auth_tables(st.session_state.storage)
-        # Izveido admin lietotāju no env, ja nav neviena lietotāja
-        # Ja nav env, atļauj reģistrāciju, lai var izveidot pirmo lietotāju
-        ensure_admin_user(st.session_state.storage)
     except Exception as e:
         st.error(f"Kļūda inicializējot sistēmu: {e}")
         import traceback
@@ -285,7 +279,7 @@ def load_demo_data():
         return
     
     storage = st.session_state.storage
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     plantings = storage.list_plantings(user_id)
 
@@ -303,6 +297,7 @@ def load_demo_data():
     ]
 
     # Izveido laukus
+    user_id = st.session_state["user"]
     created_fields = []
     for field_data in demo_fields_data:
         field = FieldModel(
@@ -310,10 +305,10 @@ def load_demo_data():
             name=field_data["name"],
             area_ha=field_data["area_ha"],
             soil=field_data["soil"],
+            owner_user_id=user_id,
             block_code=field_data["block_code"],
             rent_eur_ha=0.0
         )
-        user_id = st.session_state["user"]["id"]
         result = storage.add_field(field, user_id)
         created_fields.append(result)
 
@@ -337,12 +332,11 @@ def load_demo_data():
             year = current_year - 4 + year_offset
             crop = rotation[year_offset % len(rotation)]
             demo_plantings.append(
-                PlantingRecord(field_id=field.id, year=year, crop=crop)
+                PlantingRecord(field_id=field.id, year=year, crop=crop, owner_user_id=user_id)
             )
 
     # Pievieno sējumu ierakstus
     for p in demo_plantings:
-        user_id = st.session_state["user"]["id"]
         storage.add_planting(p, user_id)
 
     # Parāda success ar skaitiem
@@ -361,7 +355,7 @@ def clear_all_data():
             return False
         
         storage = st.session_state.storage
-        user_id = st.session_state["user"]["id"]
+        user_id = st.session_state["user"]
         if storage.clear_user_data(user_id):
             st.success("Visi dati veiksmīgi izdzēsti!")
             return True
@@ -534,7 +528,7 @@ def show_dashboard_section():
     storage = st.session_state.storage
     
     # Iegūst datus
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     all_plantings = storage.list_plantings(user_id)
     
@@ -632,7 +626,7 @@ def show_dashboard_section():
                 else:
                     st.success("Visi yield dati ir kārtībā.")
         
-        user_id = st.session_state["user"]["id"]
+        user_id = st.session_state["user"]
         fields = storage.list_fields(user_id)
         if not fields:
             st.info("Nav lauku datu, lai veidotu prognozi.")
@@ -916,7 +910,7 @@ def show_dashboard_section():
         st.subheader("Kultūru sadalījums pēc platības")
         
         # Iegūst unikālos gadus no sējumu vēstures
-        user_id = st.session_state["user"]["id"]
+        user_id = st.session_state["user"]
         all_plantings = storage.list_plantings(user_id)
         available_years = sorted(set(p.year for p in all_plantings), reverse=True)
         
@@ -930,7 +924,7 @@ def show_dashboard_section():
             )
             
             # Aprēķina platības pa kultūrām
-            user_id = st.session_state["user"]["id"]
+            user_id = st.session_state["user"]
             crop_areas = crop_area_by_year(storage, selected_year, user_id)
             
             if not crop_areas:
@@ -1065,11 +1059,13 @@ def show_fields_section():
                     if block_code_value and block_code_value != block_code:
                         st.info(f"Normalizēts bloka kods: `{block_code_value}`")
                     
+                    user_id = st.session_state["user"]
                     field = FieldModel(
                         id=0,
                         name=field_name,
                         area_ha=area_ha,
                         soil=soil_type,
+                        owner_user_id=user_id,
                         block_code=block_code_value,
                         lad_area_ha=None,
                         lad_last_edited=None,
@@ -1077,7 +1073,6 @@ def show_fields_section():
                         rent_eur_ha=rent_eur_ha,
                         ph=ph_value
                     )
-                    user_id = st.session_state["user"]["id"]
                     result = storage.add_field(field, user_id)
                     st.success(f"Lauks '{result.name}' pievienots ar ID: {result.id}")
                     st.rerun()
@@ -1087,7 +1082,7 @@ def show_fields_section():
     st.divider()
     st.subheader("Pievienotie lauki")
 
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     if not fields:
         st.info("Nav pievienotu lauku.")
@@ -1189,7 +1184,7 @@ def show_fields_section():
                     if block_code_value and block_code_value != new_block_code:
                         st.info(f"Normalizēts bloka kods: `{block_code_value}`")
                     
-                    user_id = st.session_state["user"]["id"]
+                    user_id = st.session_state["user"]
                     ok = storage.update_field(
                         field_id=selected_field.id,
                         user_id=user_id,
@@ -1211,7 +1206,7 @@ def show_fields_section():
             confirm = st.checkbox("Apstiprinu dzēšanu", key="confirm_delete_field")
 
             if st.button("Dzēst", use_container_width=True, disabled=not confirm):
-                user_id = st.session_state["user"]["id"]
+                user_id = st.session_state["user"]
                 ok = storage.delete_field(selected_field.id, user_id)
                 if ok:
                     st.success("Lauks izdzēsts.")
@@ -1231,7 +1226,7 @@ def show_history_section():
     storage = st.session_state.storage
     
     # Iegūst laukus dropdown
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     
     if not fields:
@@ -1285,8 +1280,8 @@ def show_history_section():
                     if not crop or (selected_crop == "Cits..." and not crop.strip()):
                         st.error("Kultūras nosaukums nevar būt tukšs!")
                     else:
-                        planting = PlantingRecord(field_id=selected_field_id, year=year, crop=crop.strip())
-                        user_id = st.session_state["user"]["id"]
+                        user_id = st.session_state["user"]
+                        planting = PlantingRecord(field_id=selected_field_id, year=year, crop=crop.strip(), owner_user_id=user_id)
                         storage.add_planting(planting, user_id)
                         st.success(f"Sējuma vēsture pievienota: {crop} ({year})")
                         st.rerun()
@@ -1297,7 +1292,7 @@ def show_history_section():
         
         # Tabula ar vēsturi
         st.subheader(f"Sējumu vēsture laukam '{selected_field.name}'")
-        user_id = st.session_state["user"]["id"]
+        user_id = st.session_state["user"]
         all_plantings = storage.list_plantings(user_id)
         field_history = [p for p in all_plantings if p.field_id == selected_field_id]
         
@@ -1351,7 +1346,7 @@ def show_catalog_section():
         price_meta = {}
     
     # Ielādē favorītus
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     favorites = storage.get_favorites(user_id)
     favorites_set = set(favorites)
     
@@ -1427,7 +1422,7 @@ def show_catalog_section():
     # Parāda tabulu ar favorītu toggles
     if table_data:
         # Sagatavo favorītu sarakstu
-        user_id = st.session_state["user"]["id"]
+        user_id = st.session_state["user"]
         current_favorites = storage.get_favorites(user_id)
         favorites_set = set(current_favorites)
         
@@ -1482,7 +1477,7 @@ def show_catalog_section():
                 new_favs_set = set(new_favorites)
                 
                 if current_favs_set != new_favs_set:
-                    user_id = st.session_state["user"]["id"]
+                    user_id = st.session_state["user"]
                     if storage.set_favorites(new_favorites, user_id):
                         st.success(f"Saglabāti {len(new_favorites)} favorīti.")
                         st.rerun()
@@ -1738,7 +1733,7 @@ def compute_reco():
     
     # Iegūst favorītus
     storage = st.session_state.storage
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     favorites = storage.get_favorites(user_id)
     favorites_set = set(favorites) if favorites else set()
     
@@ -1844,7 +1839,7 @@ def compute_reco():
         return
     
     # Iegūst lauku
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     selected_field = None
     for f in fields:
@@ -1866,7 +1861,7 @@ def compute_reco():
         return
     
     # Iegūst vēsturi
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     all_history = storage.list_plantings(user_id)
     history = [p for p in all_history if p.field_id == selected_field.id]
     
@@ -1974,7 +1969,7 @@ def compute_reco():
             
             # Diversifikācijas loģika (vienkāršota versija)
             if enable_diversification and base_result and base_result.get('best_crop'):
-                user_id = st.session_state["user"]["id"]
+                user_id = st.session_state["user"]
                 all_fields = storage.list_fields(user_id)
                 used_crops = {}
                 
@@ -2102,7 +2097,7 @@ def show_recommendations_section():
     storage = st.session_state.storage
     
     # Iegūst laukus
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     fields = storage.list_fields(user_id)
     
     if not fields:
@@ -2200,7 +2195,7 @@ def show_recommendations_section():
         )
     
     # Iegūst favorītus
-    user_id = st.session_state["user"]["id"]
+    user_id = st.session_state["user"]
     favorites = storage.get_favorites(user_id)
     favorites_set = set(favorites) if favorites else set()
     
@@ -2632,7 +2627,7 @@ def show_recommendations_section():
                 
                 if not base_result or base_result['best_crop'] is None:
                     # Nav atļautu kultūru - ERROR (sarkans)
-                    user_id = st.session_state["user"]["id"]
+                    user_id = st.session_state["user"]
                     all_history = storage.list_plantings(user_id)
                     history = [p for p in all_history if p.field_id == selected_field.id]
                     if not history:
@@ -2997,55 +2992,40 @@ def show_login():
     with tab1:
         st.markdown("### Pieslēgties")
         with st.form("login_form"):
-            email = st.text_input("E-pasta adrese", key="login_email")
+            username = st.text_input("Lietotājvārds", key="login_username")
             password = st.text_input("Parole", type="password", key="login_password")
-            remember_me = st.checkbox("Atcerēties mani šajā ierīcē", key="login_remember_me")
             submit = st.form_submit_button("Pieslēgties", use_container_width=True)
             
             if submit:
-                if email and password:
-                    user = authenticate(storage, email, password)
+                if username and password:
+                    user = login(storage, username, password)
                     if user:
-                        st.session_state["user"] = user
-                        
-                        # Ja "Atcerēties mani" ir atzīmēts, iestata remember token
-                        if remember_me:
-                            token = set_remember_token(storage, user["id"], remember=True)
-                            if token:
-                                set_auth_cookie(user["id"], user["email"], token, expires_days=30)
-                        else:
-                            # Noņem token, ja bija
-                            set_remember_token(storage, user["id"], remember=False)
-                            clear_auth_cookie()
-                        
                         st.rerun()
                     else:
-                        st.error("Nepareiza e-pasta adrese vai parole.")
+                        st.error("Nepareizs lietotājvārds vai parole.")
                 else:
-                    st.error("Lūdzu, ievadiet e-pasta adresi un paroli.")
+                    st.error("Lūdzu, ievadiet lietotājvārdu un paroli.")
     
     with tab2:
         st.markdown("### Reģistrēties")
         with st.form("signup_form"):
-            email = st.text_input("E-pasta adrese", key="signup_email", help="Derīga e-pasta adrese")
+            username = st.text_input("Lietotājvārds", key="signup_username")
             password = st.text_input("Parole", type="password", key="signup_password", help="Vismaz 8 simboli")
             password_repeat = st.text_input("Atkārtot paroli", type="password", key="signup_password_repeat")
             submit = st.form_submit_button("Izveidot kontu", use_container_width=True)
             
             if submit:
-                if not email or not password or not password_repeat:
+                if not username or not password or not password_repeat:
                     st.error("Lūdzu, aizpildiet visus laukus.")
                 elif password != password_repeat:
                     st.error("Paroles nesakrīt.")
                 else:
-                    try:
-                        user = register_user(storage, email, password)
-                        if user:
-                            st.session_state["user"] = user
-                            st.success("Konts izveidots veiksmīgi!")
-                            st.rerun()
-                    except ValueError as e:
-                        st.error(str(e))
+                    user = register(storage, username, password)
+                    if user:
+                        st.success("Konts izveidots veiksmīgi!")
+                        st.rerun()
+                    else:
+                        st.error("Lietotājs ar šādu lietotājvārdu jau eksistē.")
 
 
 def main():
@@ -3056,8 +3036,6 @@ def main():
         if 'storage' not in st.session_state:
             try:
                 st.session_state.storage = Storage()
-                ensure_auth_tables(st.session_state.storage)
-                ensure_admin_user(st.session_state.storage)
             except Exception as init_error:
                 st.error(f"Kļūda inicializējot sistēmu: {init_error}")
                 st.exception(init_error)
@@ -3071,27 +3049,8 @@ def main():
         
         # Pārbauda, vai lietotājs ir ielogojies
         if "user" not in st.session_state:
-            # Mēģina automātiski ielogot no cookie
-            cookie_data = get_auth_cookie()
-            if cookie_data:
-                auth_token = cookie_data.get("auth_token")
-                if auth_token:
-                    user = validate_remember_token(storage, auth_token)
-                    if user:
-                        # Token derīgs - automātiski ielogo
-                        st.session_state["user"] = user
-                        # Nerādi login formu, bet turpini ar app
-                    else:
-                        # Token nederīgs - izdzēs cookie
-                        clear_auth_cookie()
-                        show_login()
-                        return
-                else:
-                    show_login()
-                    return
-            else:
-                show_login()
-                return
+            show_login()
+            return
     except Exception as e:
         st.error(f"Kļūda: {e}")
         import traceback
@@ -3148,23 +3107,13 @@ def main():
     # Sidebar
     with st.sidebar:
         # Lietotāja informācija augšā
-        user_email = st.session_state["user"]["email"]
-        st.markdown(f"**Logged in as:** {user_email}")
+        user_id = st.session_state["user"]
+        user = storage.get_user_by_id(user_id)
+        if user:
+            st.markdown(f"**Lietotājs:** {user.username}")
         
         if st.button("Logout", use_container_width=True, key="logout_btn"):
-            # Izdzēš remember token no DB
-            if "user" in st.session_state and 'storage' in st.session_state:
-                user_id = st.session_state["user"]["id"]
-                storage = st.session_state.storage
-                clear_remember_token(storage, user_id)
-            
-            # Izdzēš cookie
-            clear_auth_cookie()
-            
-            # Iztīra session state
-            if "user" in st.session_state:
-                del st.session_state["user"]
-            
+            logout()
             st.rerun()
         
         st.divider()
@@ -3291,8 +3240,6 @@ if __name__ == "__main__":
         st.info("Mēģinot inicializēt sistēmu...")
         try:
             st.session_state.storage = Storage()
-            ensure_auth_tables(st.session_state.storage)
-            ensure_admin_user(st.session_state.storage)
             print("Sistēma inicializēta veiksmīgi")
             st.rerun()
         except Exception as e:

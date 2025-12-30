@@ -17,7 +17,9 @@ if sys.platform == 'win32':
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from .db import get_connection, get_db_cursor, is_postgres, get_lastrowid, _get_placeholder, _get_auto_increment
-from .models import FieldModel, PlantingRecord, SoilType
+from .models import FieldModel, PlantingRecord, SoilType, UserModel
+import bcrypt
+from datetime import datetime
 
 
 def _get_insert_or_replace(table: str, columns: List[str], values: List[str]) -> str:
@@ -68,12 +70,22 @@ class Storage:
     def _init_db(self):
         """Izveido tabulas, ja tās nav."""
         with get_db_cursor() as cursor:
-            # Lauku tabula
+            # Users tabula
             id_type = _get_auto_increment()
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS users (
+                    id {id_type},
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            
+            # Lauku tabula
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS fields (
                     id {id_type},
-                    user_id INTEGER NOT NULL,
+                    owner_user_id INTEGER NOT NULL,
                     name TEXT NOT NULL,
                     area_ha REAL NOT NULL CHECK(area_ha > 0),
                     soil TEXT NOT NULL,
@@ -82,7 +94,8 @@ class Storage:
                     lad_last_edited TEXT,
                     lad_last_synced TEXT,
                     rent_eur_ha REAL DEFAULT 0.0,
-                    ph REAL
+                    ph REAL,
+                    is_organic INTEGER
                 )
             """)
             
@@ -93,7 +106,7 @@ class Storage:
                         field_id INTEGER NOT NULL,
                         year INTEGER NOT NULL,
                         crop TEXT NOT NULL,
-                        user_id INTEGER NOT NULL,
+                        owner_user_id INTEGER NOT NULL,
                         PRIMARY KEY (field_id, year),
                         FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
                     )
@@ -104,7 +117,7 @@ class Storage:
                         field_id INTEGER NOT NULL,
                         year INTEGER NOT NULL,
                         crop TEXT NOT NULL,
-                        user_id INTEGER NOT NULL,
+                        owner_user_id INTEGER NOT NULL,
                         PRIMARY KEY (field_id, year),
                         FOREIGN KEY (field_id) REFERENCES fields(id)
                     )
@@ -115,34 +128,53 @@ class Storage:
             
             # Izpilda migrāciju augsnes vērtībām
             self.migrate_soil_values()
+            
+            # Migrācija: izveido admin user, ja nav neviena lietotāja
+            self._ensure_admin_user()
     
     def _migrate_columns(self):
         """Pievieno jaunas kolonnas, ja tās neeksistē."""
         with get_db_cursor() as cursor:
-            # Pārbauda un pievieno kolonnas fields tabulai
+            # Migrācija: maina user_id uz owner_user_id fields tabulā
+            try:
+                cursor.execute("ALTER TABLE fields ADD COLUMN owner_user_id INTEGER")
+                # Kopē datus no user_id uz owner_user_id, ja user_id eksistē
+                try:
+                    cursor.execute("UPDATE fields SET owner_user_id = user_id WHERE owner_user_id IS NULL")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            
+            # Pievieno citas kolonnas fields tabulai
             new_columns = [
-                ("user_id", "INTEGER"),
                 ("block_code", "TEXT"),
                 ("lad_area_ha", "REAL"),
                 ("lad_last_edited", "TEXT"),
                 ("lad_last_synced", "TEXT"),
                 ("rent_eur_ha", "REAL DEFAULT 0.0"),
                 ("ph", "REAL"),
-                ("is_organic", "INTEGER")  # 0 = False, 1 = True, NULL = izmanto globālo iestatījumu
+                ("is_organic", "INTEGER")
             ]
             
             for col_name, col_type in new_columns:
                 try:
-                    if is_postgres():
-                        cursor.execute(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}")
-                    else:
-                        cursor.execute(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}")
+                    cursor.execute(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}")
                 except Exception:
-                    # Kolonna jau eksistē
                     pass
             
-            # Migrācija: piešķir user_id esošajiem ierakstiem
-            # Iegūst pirmā lietotāja ID vai izveido admin user
+            # Migrācija: pievieno owner_user_id plantings tabulai
+            try:
+                cursor.execute("ALTER TABLE plantings ADD COLUMN owner_user_id INTEGER")
+                # Kopē datus no user_id uz owner_user_id, ja user_id eksistē
+                try:
+                    cursor.execute("UPDATE plantings SET owner_user_id = user_id WHERE owner_user_id IS NULL")
+                except Exception:
+                    pass
+            except Exception:
+                pass
+            
+            # Migrācija: piešķir owner_user_id esošajiem ierakstiem
             cursor.execute("SELECT id FROM users ORDER BY id LIMIT 1")
             first_user_row = cursor.fetchone()
             
@@ -150,38 +182,30 @@ class Storage:
                 first_user_id = first_user_row[0]
             else:
                 # Nav neviena lietotāja - izveido admin user
-                from .auth import create_user
-                import os
-                admin_email = os.getenv("FARM_ADMIN_EMAIL", "admin@example.com")
-                admin_password = os.getenv("FARM_ADMIN_PASS", "admin123")
-                admin_user = create_user(self, admin_email, admin_password)
+                admin_user = self.create_user("admin", "admin123")
                 if admin_user:
-                    first_user_id = admin_user["id"]
+                    first_user_id = admin_user.id
                 else:
-                    first_user_id = 1  # Fallback
+                    first_user_id = 1
             
-            # Aizpilda user_id esošajiem fields ierakstiem
+            # Aizpilda owner_user_id esošajiem ierakstiem
             placeholder = _get_placeholder()
             cursor.execute(
-                f"UPDATE fields SET user_id = {placeholder} WHERE user_id IS NULL",
+                f"UPDATE fields SET owner_user_id = {placeholder} WHERE owner_user_id IS NULL",
                 (first_user_id,)
             )
-            
-            # Pievieno user_id plantings tabulai, ja nav
-            try:
-                if is_postgres():
-                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER")
-                else:
-                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER")
-            except Exception:
-                # Kolonna jau eksistē
-                pass
-            
-            # Aizpilda user_id esošajiem plantings ierakstiem
             cursor.execute(
-                f"UPDATE plantings SET user_id = {placeholder} WHERE user_id IS NULL",
+                f"UPDATE plantings SET owner_user_id = {placeholder} WHERE owner_user_id IS NULL",
                 (first_user_id,)
             )
+    
+    def _ensure_admin_user(self):
+        """Izveido admin user, ja nav neviena lietotāja."""
+        with get_db_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM users")
+            count = cursor.fetchone()[0]
+            if count == 0:
+                self.create_user("admin", "admin123")
     
     def migrate_soil_values(self):
         """Migrē vecās augsnes vērtības uz jaunajām (label -> code, vecie kodi -> jaunie kodi)."""
@@ -217,6 +241,75 @@ class Storage:
                     (new_code, old_code)
                 )
     
+    def create_user(self, username: str, password: str) -> Optional[UserModel]:
+        """Izveido jaunu lietotāju."""
+        placeholder = _get_placeholder()
+        
+        # Pārbauda, vai lietotājs jau eksistē
+        with get_db_cursor() as cursor:
+            cursor.execute(f"SELECT id FROM users WHERE username = {placeholder}", (username,))
+            if cursor.fetchone():
+                return None
+        
+        # Hash paroli
+        password_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        created_at = datetime.now().isoformat()
+        
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder})",
+                (username, password_hash, created_at)
+            )
+            user_id = cursor.lastrowid
+            conn.commit()
+            cursor.close()
+            return UserModel(id=user_id, username=username, password_hash=password_hash, created_at=created_at)
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+    
+    def authenticate_user(self, username: str, password: str) -> Optional[UserModel]:
+        """Autentificē lietotāju."""
+        placeholder = _get_placeholder()
+        
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                f"SELECT id, username, password_hash, created_at FROM users WHERE username = {placeholder}",
+                (username,)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            user_id, db_username, password_hash, created_at = row
+            
+            if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
+                return UserModel(id=user_id, username=db_username, password_hash=password_hash, created_at=created_at)
+            else:
+                return None
+    
+    def get_user_by_id(self, user_id: int) -> Optional[UserModel]:
+        """Iegūst lietotāju pēc ID."""
+        placeholder = _get_placeholder()
+        
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                f"SELECT id, username, password_hash, created_at FROM users WHERE id = {placeholder}",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            user_id, username, password_hash, created_at = row
+            return UserModel(id=user_id, username=username, password_hash=password_hash, created_at=created_at)
+    
     def add_field(self, field: FieldModel, user_id: int) -> FieldModel:
         """Pievieno lauku datubāzē."""
         placeholder = _get_placeholder()
@@ -229,13 +322,13 @@ class Storage:
             
             if is_postgres():
                 cursor.execute(
-                    f"INSERT INTO fields (user_id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}) RETURNING id",
+                    f"INSERT INTO fields (owner_user_id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}) RETURNING id",
                     (user_id, field.name, field.area_ha, field.soil.code, field.block_code, field.lad_area_ha, field.lad_last_edited, field.lad_last_synced, field.rent_eur_ha, field.ph, is_organic_int)
                 )
                 field_id = cursor.fetchone()[0]
             else:
                 cursor.execute(
-                    f"INSERT INTO fields (user_id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                    f"INSERT INTO fields (owner_user_id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder}, {placeholder})",
                     (user_id, field.name, field.area_ha, field.soil.code, field.block_code, field.lad_area_ha, field.lad_last_edited, field.lad_last_synced, field.rent_eur_ha, field.ph, is_organic_int)
                 )
                 field_id = cursor.lastrowid
@@ -247,6 +340,7 @@ class Storage:
                 name=field.name,
                 area_ha=field.area_ha,
                 soil=field.soil,
+                owner_user_id=user_id,
                 block_code=field.block_code,
                 lad_area_ha=field.lad_area_ha,
                 lad_last_edited=field.lad_last_edited,
@@ -282,7 +376,7 @@ class Storage:
         
         with get_db_cursor() as cursor:
             cursor.execute(
-                f"SELECT id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic FROM fields WHERE user_id = {placeholder}",
+                f"SELECT id, name, area_ha, soil, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic, owner_user_id FROM fields WHERE owner_user_id = {placeholder}",
                 (user_id,)
             )
             rows = cursor.fetchall()
@@ -323,11 +417,13 @@ class Storage:
                 if len(row) > 10 and row[10] is not None:
                     is_organic_value = bool(row[10])
                 
+                owner_user_id = row[11] if len(row) > 11 else user_id
                 fields.append(FieldModel(
                     id=row[0],
                     name=row[1],
                     area_ha=row[2],
                     soil=soil,
+                    owner_user_id=owner_user_id,
                     block_code=row[4] if len(row) > 4 else None,
                     lad_area_ha=row[5] if len(row) > 5 else None,
                     lad_last_edited=row[6] if len(row) > 6 else None,
@@ -357,12 +453,22 @@ class Storage:
         """Atjauno lauka datus (tikai, ja pieder lietotājam)."""
         placeholder = _get_placeholder()
         
+        # Pārbauda, vai lauks pieder lietotājam
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                f"SELECT owner_user_id FROM fields WHERE id = {placeholder}",
+                (field_id,)
+            )
+            row = cursor.fetchone()
+            if not row or row[0] != user_id:
+                return False
+        
         # Konvertē is_organic uz INTEGER (None -> None, True -> 1, False -> 0)
         is_organic_int = None if is_organic is None else (1 if is_organic else 0)
         
         with get_db_cursor() as cursor:
             cursor.execute(
-                f"UPDATE fields SET name={placeholder}, area_ha={placeholder}, soil={placeholder}, block_code={placeholder}, lad_area_ha={placeholder}, lad_last_edited={placeholder}, lad_last_synced={placeholder}, rent_eur_ha={placeholder}, ph={placeholder}, is_organic={placeholder} WHERE id={placeholder} AND user_id={placeholder}",
+                f"UPDATE fields SET name={placeholder}, area_ha={placeholder}, soil={placeholder}, block_code={placeholder}, lad_area_ha={placeholder}, lad_last_edited={placeholder}, lad_last_synced={placeholder}, rent_eur_ha={placeholder}, ph={placeholder}, is_organic={placeholder} WHERE id={placeholder} AND owner_user_id={placeholder}",
                 (name, area_ha, soil.code, block_code, lad_area_ha, lad_last_edited, lad_last_synced, rent_eur_ha, ph, is_organic_int, field_id, user_id)
             )
             return cursor.rowcount > 0
@@ -374,22 +480,27 @@ class Storage:
         with get_db_cursor() as cursor:
             # Pārbauda, vai field_id pieder lietotājam
             cursor.execute(
-                f"SELECT user_id FROM fields WHERE id = {placeholder} AND user_id = {placeholder}",
+                f"SELECT owner_user_id FROM fields WHERE id = {placeholder} AND owner_user_id = {placeholder}",
                 (planting.field_id, user_id)
             )
             row = cursor.fetchone()
             if not row:
                 raise ValueError("Lauks nav atrasts vai nepieder lietotājam")
             
-            # Pievieno ar user_id
+            # Pievieno ar owner_user_id
             sql = _get_insert_or_replace(
                 'plantings',
-                ['field_id', 'year', 'crop', 'user_id'],
+                ['field_id', 'year', 'crop', 'owner_user_id'],
                 [placeholder, placeholder, placeholder, placeholder]
             )
             cursor.execute(sql, (planting.field_id, planting.year, planting.crop, user_id))
             
-            return planting
+            return PlantingRecord(
+                field_id=planting.field_id,
+                year=planting.year,
+                crop=planting.crop,
+                owner_user_id=user_id
+            )
     
     def list_plantings(self, user_id: int) -> List[PlantingRecord]:
         """Atgriež visus stādīšanas ierakstus konkrētam lietotājam."""
@@ -397,7 +508,7 @@ class Storage:
         
         with get_db_cursor() as cursor:
             cursor.execute(
-                f"SELECT field_id, year, crop FROM plantings WHERE user_id = {placeholder}",
+                f"SELECT field_id, year, crop, owner_user_id FROM plantings WHERE owner_user_id = {placeholder}",
                 (user_id,)
             )
             rows = cursor.fetchall()
@@ -405,7 +516,8 @@ class Storage:
                 PlantingRecord(
                     field_id=row[0],
                     year=row[1],
-                    crop=row[2]
+                    crop=row[2],
+                    owner_user_id=row[3] if len(row) > 3 else user_id
                 )
                 for row in rows
             ]
@@ -417,13 +529,13 @@ class Storage:
         with get_db_cursor() as cursor:
             # Dzēš saistītos ierakstus (tikai no šī lietotāja)
             cursor.execute(
-                f"DELETE FROM plantings WHERE field_id = {placeholder} AND user_id = {placeholder}",
+                f"DELETE FROM plantings WHERE field_id = {placeholder} AND owner_user_id = {placeholder}",
                 (field_id, user_id)
             )
             
             # Dzēš lauku (tikai, ja pieder lietotājam)
             cursor.execute(
-                f"DELETE FROM fields WHERE id = {placeholder} AND user_id = {placeholder}",
+                f"DELETE FROM fields WHERE id = {placeholder} AND owner_user_id = {placeholder}",
                 (field_id, user_id)
             )
             return cursor.rowcount > 0
@@ -433,15 +545,15 @@ class Storage:
         placeholder = _get_placeholder()
         
         with get_db_cursor() as cursor:
-            # Dzēš plantings tieši pēc user_id
+            # Dzēš plantings tieši pēc owner_user_id
             cursor.execute(
-                f"DELETE FROM plantings WHERE user_id = {placeholder}",
+                f"DELETE FROM plantings WHERE owner_user_id = {placeholder}",
                 (user_id,)
             )
             
             # Dzēš fields
             cursor.execute(
-                f"DELETE FROM fields WHERE user_id = {placeholder}",
+                f"DELETE FROM fields WHERE owner_user_id = {placeholder}",
                 (user_id,)
             )
             return True
