@@ -8,11 +8,11 @@ from typing import Optional
 from datetime import datetime, timedelta
 
 try:
-    from extra_streamlit_components import CookieManager
+    from extra_streamlit_components import CookieManager  # type: ignore
     EXTRA_STREAMLIT_AVAILABLE = True
 except ImportError:
     EXTRA_STREAMLIT_AVAILABLE = False
-    CookieManager = None
+    CookieManager = None  # type: ignore
 
 from .storage import Storage
 from .models import UserModel
