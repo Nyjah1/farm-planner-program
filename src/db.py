@@ -26,18 +26,59 @@ def get_database_url() -> Optional[str]:
     Vispirms meklē st.secrets["DB_URL"], pēc tam os.environ["DATABASE_URL"].
     
     Returns:
-        DATABASE_URL string vai None, ja nav iestatīts
+        DATABASE_URL string vai None, ja nav iestatīts vai nav derīgs
     """
     # Mēģina iegūt no Streamlit secrets (Streamlit Cloud)
     try:
         import streamlit as st
         if hasattr(st, 'secrets') and 'DB_URL' in st.secrets:
-            return st.secrets['DB_URL']
+            url = st.secrets['DB_URL']
+            if url and _is_valid_database_url(url):
+                return url
     except Exception:
         pass
     
     # Fallback uz vides mainīgo
-    return os.environ.get('DATABASE_URL')
+    url = os.environ.get('DATABASE_URL')
+    if url and _is_valid_database_url(url):
+        return url
+    
+    return None
+
+
+def _is_valid_database_url(url: str) -> bool:
+    """
+    Pārbauda, vai DATABASE_URL ir derīgs formāts.
+    
+    Args:
+        url: DATABASE_URL string
+        
+    Returns:
+        True, ja URL ir derīgs, False citādi
+    """
+    if not url or not isinstance(url, str):
+        return False
+    
+    # Noņem whitespace
+    url = url.strip()
+    
+    # Pārbauda, vai nav tukšs
+    if not url:
+        return False
+    
+    # Pārbauda, vai nav acīmredzami nepareizs (piemēram, satur "npx" bez "=")
+    # Ja satur "npx" bet nav PostgreSQL URL, tas ir nepareizs
+    if 'npx' in url.lower() and not (url.startswith('postgresql://') or url.startswith('postgres://')):
+        print(f"Brīdinājums: DATABASE_URL satur 'npx', bet nav PostgreSQL URL formāts: {url[:50]}...")
+        return False
+    
+    # Validācija: jāsākas ar postgresql:// vai postgres://
+    if not (url.startswith('postgresql://') or url.startswith('postgres://')):
+        # Ja nav PostgreSQL URL, bet ir iestatīts, tas varētu būt kļūda
+        # Bet atstājam, lai psycopg2 pats pārbauda (var būt citi formāti)
+        pass
+    
+    return True
 
 
 def is_postgres() -> bool:
@@ -70,9 +111,24 @@ def get_connection() -> DBConnection:
                 "Instalējiet ar: pip install psycopg2-binary"
             )
         
-        # Parse DATABASE_URL (Render formāts: postgresql://user:pass@host:port/dbname)
-        # psycopg2 atbalsta tiešu DATABASE_URL izmantošanu
-        return psycopg2.connect(database_url)
+        # Pārbauda, vai URL ir derīgs
+        if not _is_valid_database_url(database_url):
+            raise ValueError(
+                f"Nevalīds DATABASE_URL formāts. "
+                f"Paredzēts formāts: postgresql://user:password@host:port/database "
+                f"Vai noņemiet DATABASE_URL, lai izmantotu SQLite."
+            )
+        
+        try:
+            # Parse DATABASE_URL (Render formāts: postgresql://user:pass@host:port/dbname)
+            # psycopg2 atbalsta tiešu DATABASE_URL izmantošanu
+            return psycopg2.connect(database_url)
+        except Exception as e:
+            # Ja neizdodas savienoties, izvada labāku kļūdas ziņojumu
+            raise ValueError(
+                f"Neizdevās savienoties ar PostgreSQL datubāzi. "
+                f"Pārbaudiet DATABASE_URL. Kļūda: {e}"
+            ) from e
     else:
         # SQLite (fallback)
         db_path = "data/farm.db"
