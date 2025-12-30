@@ -516,6 +516,100 @@ def generate_report_text(
     return "\n".join(lines)
 
 
+def build_profit_timeseries(fields, history, plan, years_back=3, years_forward=3):
+    """
+    Izveido DataFrame ar peļņas datiem pa gadiem.
+    
+    Args:
+        fields: Lauku saraksts
+        history: Vēsturisko sējumu saraksts
+        plan: Plānošanas rezultāts (dict ar "plan" key)
+        years_back: Cik gadus atpakaļ rādīt vēsturi
+        years_forward: Cik gadus uz priekšu rādīt prognozi
+        
+    Returns:
+        DataFrame ar kolonnām: field_name, year(str), profit_total, profit_per_ha, type
+    """
+    current_year = datetime.now().year
+    start_year = current_year + 1
+    historical_years = [start_year - years_back, start_year - years_back + 1, start_year - 1]
+    forecast_years = [start_year + i for i in range(years_forward)]
+    
+    rows = []
+    field_area = {f.name: float(f.area_ha) for f in fields}
+    
+    # Vēsturiskie dati
+    for f in fields:
+        field_history = [p for p in history if p.field_id == f.id]
+        for hist_year in historical_years:
+            hist_planting = next((p for p in field_history if p.year == hist_year), None)
+            if hist_planting:
+                # Aprēķina peļņu (ja ir dati)
+                profit = 0.0
+                try:
+                    from src.price_provider import get_price_for_crop
+                    from src.profit import profit_eur_detailed
+                    crops_dict = load_catalog()
+                    prices_csv = load_prices_csv()
+                    if hist_planting.crop in crops_dict:
+                        crop = crops_dict[hist_planting.crop]
+                        price_info = get_price_for_crop(crop, prices_csv)
+                        profit_details = profit_eur_detailed(f, crop, price_info)
+                        profit = profit_details["profit"]
+                except Exception:
+                    pass
+                
+                area_ha = field_area.get(f.name, 0)
+                profit_per_ha = (profit / area_ha) if area_ha > 0 else 0.0
+                
+                rows.append({
+                    "field_name": f.name,
+                    "year": str(hist_year),
+                    "profit_total": profit,
+                    "profit_per_ha": profit_per_ha,
+                    "type": "history"
+                })
+    
+    # Prognozētie dati
+    for f in fields:
+        field_history = [p for p in history if p.field_id == f.id]
+        plan_result = plan_for_years(
+            field=f,
+            history=field_history,
+            crops_dict=load_catalog(),
+            start_year=start_year,
+            years=years_forward,
+            include_crops_without_price=False
+        )
+        
+        for entry in plan_result.get("plan", []):
+            year = int(entry["year"])
+            if year in forecast_years:
+                profit = float(entry.get("profit", 0.0))
+                area_ha = field_area.get(f.name, 0)
+                profit_per_ha = (profit / area_ha) if area_ha > 0 else 0.0
+                
+                rows.append({
+                    "field_name": f.name,
+                    "year": str(year),
+                    "profit_total": profit,
+                    "profit_per_ha": profit_per_ha,
+                    "type": "forecast"
+                })
+    
+    df = pd.DataFrame(rows)
+    
+    # Sakārto gada secību
+    if not df.empty:
+        all_years = [str(y) for y in historical_years + forecast_years]
+        df = df[df["year"].isin(all_years)].copy()
+        df["year_order"] = df["year"].map({y: i for i, y in enumerate(all_years)})
+        df = df.sort_values(["field_name", "year_order"])
+        df = df.drop(columns=["year_order"])
+    
+    return df
+
+
 def show_dashboard_section():
     """Sadaļa: Dashboard."""
     st.title("Dashboard")
@@ -632,249 +726,222 @@ def show_dashboard_section():
             st.info("Nav lauku datu, lai veidotu prognozi.")
             return
 
-        current_year = datetime.now().year
-        start_year = current_year + 1
-        years = [start_year, start_year + 1, start_year + 2]
-        
-        # Vēsturiskie gadi (pēdējie 3 gadi pirms start_year)
-        historical_years = [start_year - 3, start_year - 2, start_year - 1]
-
         # dropdown: visi lauki / viens lauks
         options = ["Visi lauki"] + [f"{f.id} - {f.name}" for f in fields]
         selected = st.selectbox("Izvēlēties lauku", options, key="dash_field_select")
 
-        # savāc datus (1x)
+        # Iegūst datus
         all_plantings = storage.list_plantings(user_id)
-        rows = []
         
-        # Ielādē cenas
-        from src.price_provider import get_price_for_crop
-        from src.profit import profit_eur_detailed
-        prices_csv = load_prices_csv()
-
-        for f in fields:
-            field_history = [p for p in all_plantings if p.field_id == f.id]
-            
-            # Aprēķina vēsturisko peļņu (ja ir dati)
-            for hist_year in historical_years:
-                hist_planting = next((p for p in field_history if p.year == hist_year), None)
-                if hist_planting and hist_planting.crop in crops_dict:
-                    crop = crops_dict[hist_planting.crop]
-                    price_info = get_price_for_crop(crop, prices_csv)
-                    profit_details = profit_eur_detailed(f, crop, price_info)
-                    rows.append({
-                        "Year": hist_year,
-                        "Field": f.name,
-                        "Profit": profit_details["profit"],
-                        "IsHistorical": True,
-                    })
-
-            plan_result = plan_for_years(
-                field=f,
-                history=field_history,
-                crops_dict=crops_dict,
-                start_year=start_year,
-                years=3,
-                include_crops_without_price=False
-            )
-
-            for entry in plan_result.get("plan", []):
-                rows.append({
-                    "Year": int(entry["year"]),
-                    "Field": f.name,
-                    "Profit": float(entry.get("profit", 0.0)),
-                    "IsHistorical": False,
-                })
-
-        df = pd.DataFrame(rows)
-
+        # Izveido DataFrame ar helper funkciju
+        df = build_profit_timeseries(fields, all_plantings, None, years_back=3, years_forward=3)
+        
         if df.empty:
             st.info("Nav pietiekamu datu, lai uzzīmētu grafiku.")
             return
 
-        # Visi gadi (vēsturiskie + prognozētie)
-        all_years = historical_years + years
-        df = df[df["Year"].isin(all_years)].copy()
-        
-        # Izveido YearLabel ar vizuālu atšķirību
-        def format_year_label(row):
-            year = row["Year"]
-            is_hist = row.get("IsHistorical", False)
-            if is_hist:
-                return f"{year} (vēsture)"
-            return str(year)
-        
-        df["YearLabel"] = df.apply(format_year_label, axis=1)
-
-        # peļņa uz ha
-        field_area = {f.name: float(f.area_ha) for f in fields}
-        df["AreaHa"] = df["Field"].map(field_area).fillna(0)
-        df["ProfitPerHa"] = df.apply(lambda r: (r["Profit"] / r["AreaHa"]) if r["AreaHa"] > 0 else 0, axis=1)
-
-        # ja izvēlēts konkrēts lauks — filtrējam df
+        # Filtrē pēc izvēlētā lauka
         if selected != "Visi lauki":
             selected_name = selected.split(" - ", 1)[1]
-            df = df[df["Field"] == selected_name].copy()
+            df = df[df["field_name"] == selected_name].copy()
+            if df.empty:
+                st.info("Nav datu šim laukam.")
+                return
 
-        # Sakārto gada secību: vēsturiskie, tad prognozētie
-        historical_df = df[df["IsHistorical"] == True].copy()
-        forecast_df = df[df["IsHistorical"] == False].copy()
+        # Visi gadi kārtībā
+        current_year = datetime.now().year
+        start_year = current_year + 1
+        historical_years = [str(start_year - 3), str(start_year - 2), str(start_year - 1)]
+        forecast_years = [str(start_year), str(start_year + 1), str(start_year + 2)]
+        all_years_ordered = historical_years + forecast_years
         
-        # Sakārto vēsturiskos gadus
-        if not historical_df.empty:
-            historical_df = historical_df.sort_values("Year")
-        # Sakārto prognozētos gadus
-        if not forecast_df.empty:
-            forecast_df = forecast_df.sort_values("Year")
+        # Filtrē tikai gadi, kas ir datu struktūrā
+        df = df[df["year"].isin(all_years_ordered)].copy()
         
         # 2 grafiki blakus
+        import plotly.graph_objects as go
+        
         col_left, col_right = st.columns(2)
 
         with col_left:
             st.markdown("#### Peļņa (EUR)")
             
-            # Izveido grafiku ar plotly, lai varētu kontrolēt stilu
-            import plotly.graph_objects as go
-            
             fig_profit = go.Figure()
             
-            # Vēsturiskie gadi (gaišāka līnija)
-            if not historical_df.empty:
-                for field_name in historical_df["Field"].unique():
-                    field_data = historical_df[historical_df["Field"] == field_name]
-                    fig_profit.add_trace(go.Scatter(
-                        x=field_data["YearLabel"],
-                        y=field_data["Profit"],
-                        name=f"{field_name} (vēsture)",
-                        line=dict(color='lightgray', width=2, dash='dot'),
-                        mode='lines+markers'
-                    ))
+            # Visi lauki
+            field_names = sorted(df["field_name"].unique())
+            is_all_fields = selected == "Visi lauki"
             
-            # Prognozētie gadi (normāla līnija)
-            if not forecast_df.empty:
-                for field_name in forecast_df["Field"].unique():
-                    field_data = forecast_df[forecast_df["Field"] == field_name]
-                    fig_profit.add_trace(go.Scatter(
-                        x=field_data["YearLabel"],
-                        y=field_data["Profit"],
-                        name=field_name,
-                        line=dict(width=2),
-                        mode='lines+markers'
-                    ))
+            # Krāsu palete
+            import plotly.colors as pc
+            colors = pc.qualitative.Set3 if len(field_names) > 1 else pc.qualitative.Plotly
             
-            # Ja ir "Visi lauki", pievieno "Kopā"
-            if selected == "Visi lauki":
-                if not historical_df.empty:
-                    hist_total = historical_df.groupby("YearLabel")["Profit"].sum()
+            # Vispirms pievieno "Kopā", ja "Visi lauki"
+            if is_all_fields:
+                total_df = df.groupby(["year", "type"]).agg({
+                    "profit_total": "sum"
+                }).reset_index()
+                total_df = total_df.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)}))
+                
+                if not total_df.empty:
                     fig_profit.add_trace(go.Scatter(
-                        x=hist_total.index,
-                        y=hist_total.values,
-                        name="Kopā (vēsture)",
-                        line=dict(color='gray', width=2, dash='dot'),
-                        mode='lines+markers'
-                    ))
-                if not forecast_df.empty:
-                    forecast_total = forecast_df.groupby("YearLabel")["Profit"].sum()
-                    fig_profit.add_trace(go.Scatter(
-                        x=forecast_total.index,
-                        y=forecast_total.values,
+                        x=total_df["year"],
+                        y=total_df["profit_total"],
                         name="Kopā",
-                        line=dict(color='blue', width=3),
-                        mode='lines+markers'
+                        line=dict(color="#1f77b4", width=5),
+                        mode='lines+markers',
+                        marker=dict(size=8, opacity=1.0),
+                        hovertemplate='%{y:,.0f} EUR<extra></extra>'
                     ))
+            
+            # Pievieno lauku tracēs
+            for idx, field_name in enumerate(field_names):
+                field_df = df[df["field_name"] == field_name].copy()
+                field_df = field_df.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)}))
+                
+                if field_df.empty:
+                    continue
+                
+                # Viena trace ar visiem gadiem (vēsture + prognoze)
+                line_width = 1.5 if is_all_fields else 3
+                line_color = colors[idx % len(colors)]
+                opacity = 0.7 if is_all_fields else 1.0
+                
+                # Marker stils - vienāds visiem punktiem (vēsture un prognoze savienoti)
+                fig_profit.add_trace(go.Scatter(
+                    x=field_df["year"],
+                    y=field_df["profit_total"],
+                    name=field_name,
+                    line=dict(color=line_color, width=line_width),
+                    mode='lines+markers',
+                    marker=dict(size=6, opacity=1.0),
+                    opacity=opacity,
+                    hovertemplate='%{y:,.0f} EUR<extra></extra>'
+                ))
             
             fig_profit.update_layout(
-                height=320,
-                xaxis_title="Gads",
-                yaxis_title="Peļņa (EUR)",
-                hovermode='x unified'
+                height=340,
+                xaxis=dict(
+                    title="Gads",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=all_years_ordered,
+                    gridcolor="rgba(200, 200, 200, 0.3)"
+                ),
+                yaxis=dict(
+                    title="Peļņa (EUR)",
+                    tickformat=",.0f",
+                    gridcolor="rgba(200, 200, 200, 0.3)"
+                ),
+                hovermode="x unified",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5
+                ),
+                margin=dict(b=70, l=50, r=15, t=15),
+                plot_bgcolor="white"
             )
             st.plotly_chart(fig_profit, use_container_width=True)
 
         with col_right:
             st.markdown("#### Peļņa (EUR/ha)")
             
-            # Izveido grafiku ar plotly
             fig_ha = go.Figure()
             
-            # Vēsturiskie gadi (gaišāka līnija)
-            if not historical_df.empty:
-                for field_name in historical_df["Field"].unique():
-                    field_data = historical_df[historical_df["Field"] == field_name]
+            # Vispirms pievieno "Kopā", ja "Visi lauki"
+            if is_all_fields:
+                # Aprēķina kopējo peļņu un kopējo platību pa gadiem
+                field_areas = {f.name: float(f.area_ha) for f in fields}
+                total_area = sum(field_areas.values())
+                
+                total_df = df.groupby(["year", "type"]).agg({
+                    "profit_total": "sum"
+                }).reset_index()
+                total_df["profit_per_ha"] = total_df["profit_total"] / total_area if total_area > 0 else 0
+                total_df = total_df.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)}))
+                
+                if not total_df.empty:
                     fig_ha.add_trace(go.Scatter(
-                        x=field_data["YearLabel"],
-                        y=field_data["ProfitPerHa"],
-                        name=f"{field_name} (vēsture)",
-                        line=dict(color='lightgray', width=2, dash='dot'),
-                        mode='lines+markers',
-                        showlegend=False
-                    ))
-            
-            # Prognozētie gadi (normāla līnija)
-            if not forecast_df.empty:
-                for field_name in forecast_df["Field"].unique():
-                    field_data = forecast_df[forecast_df["Field"] == field_name]
-                    fig_ha.add_trace(go.Scatter(
-                        x=field_data["YearLabel"],
-                        y=field_data["ProfitPerHa"],
-                        name=field_name,
-                        line=dict(width=2),
-                        mode='lines+markers',
-                        showlegend=False
-                    ))
-            
-            # Ja ir "Visi lauki", pievieno "Kopā"
-            if selected == "Visi lauki":
-                if not historical_df.empty:
-                    hist_total_profit = historical_df.groupby("YearLabel")["Profit"].sum()
-                    hist_total_area = historical_df.groupby("YearLabel")["AreaHa"].sum()
-                    hist_avg_ha = (hist_total_profit / hist_total_area).fillna(0)
-                    fig_ha.add_trace(go.Scatter(
-                        x=hist_avg_ha.index,
-                        y=hist_avg_ha.values,
-                        name="Kopā (vēsture)",
-                        line=dict(color='gray', width=2, dash='dot'),
-                        mode='lines+markers',
-                        showlegend=False
-                    ))
-                if not forecast_df.empty:
-                    forecast_total_profit = forecast_df.groupby("YearLabel")["Profit"].sum()
-                    forecast_total_area = forecast_df.groupby("YearLabel")["AreaHa"].sum()
-                    forecast_avg_ha = (forecast_total_profit / forecast_total_area).fillna(0)
-                    fig_ha.add_trace(go.Scatter(
-                        x=forecast_avg_ha.index,
-                        y=forecast_avg_ha.values,
+                        x=total_df["year"],
+                        y=total_df["profit_per_ha"],
                         name="Kopā",
-                        line=dict(color='blue', width=3),
+                        line=dict(color="#1f77b4", width=5),
                         mode='lines+markers',
-                        showlegend=False
+                        marker=dict(size=8, opacity=1.0),
+                        showlegend=False,
+                        hovertemplate='%{y:,.0f} EUR/ha<extra></extra>'
                     ))
+            
+            # Pievieno lauku tracēs
+            for idx, field_name in enumerate(field_names):
+                field_df = df[df["field_name"] == field_name].copy()
+                field_df = field_df.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)}))
+                
+                if field_df.empty:
+                    continue
+                
+                line_width = 1.5 if is_all_fields else 3
+                line_color = colors[idx % len(colors)]
+                opacity = 0.7 if is_all_fields else 1.0
+                
+                fig_ha.add_trace(go.Scatter(
+                    x=field_df["year"],
+                    y=field_df["profit_per_ha"],
+                    name=field_name,
+                    line=dict(color=line_color, width=line_width),
+                    mode='lines+markers',
+                    marker=dict(size=6, opacity=1.0),
+                    opacity=opacity,
+                    showlegend=False,
+                    hovertemplate='%{y:,.0f} EUR/ha<extra></extra>'
+                ))
             
             fig_ha.update_layout(
-                height=320,
-                xaxis_title="Gads",
-                yaxis_title="Peļņa (EUR/ha)",
-                hovermode='x unified'
+                height=340,
+                xaxis=dict(
+                    title="Gads",
+                    type="category",
+                    categoryorder="array",
+                    categoryarray=all_years_ordered,
+                    gridcolor="rgba(200, 200, 200, 0.3)"
+                ),
+                yaxis=dict(
+                    title="Peļņa (EUR/ha)",
+                    tickformat=",.0f",
+                    gridcolor="rgba(200, 200, 200, 0.3)"
+                ),
+                hovermode="x unified",
+                margin=dict(b=50, l=50, r=15, t=15),
+                plot_bgcolor="white"
             )
             st.plotly_chart(fig_ha, use_container_width=True)
         
         # Paskaidrojums par vēsturiskajiem gadiem
-        if not historical_df.empty:
-            st.caption("Vēsturiskie gadi (pēdējie 3 gadi) ir parādīti ar punktētu līniju. Prognozētie gadi ir parādīti ar nepārtrauktu līniju.")
+        if not df[df["type"] == "history"].empty:
+            st.caption("Vēsturiskie gadi (pēdējie 3 gadi) un prognozētie gadi ir parādīti ar nepārtrauktu līniju.")
 
         # Pārbauda, vai 2. prognozes gadā peļņa ir zemāka (rotācijas efekts)
+        forecast_df = df[df["type"] == "forecast"].copy()
         if not forecast_df.empty:
-            forecast_sorted = forecast_df.sort_values("Year").copy()
+            forecast_sorted = forecast_df.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)})).copy()
             if len(forecast_sorted) >= 2:
                 # Aprēķina peļņu uz ha katram gadam
                 if selected == "Visi lauki":
                     # Visiem laukiem kopā
-                    yearly_stats = forecast_sorted.groupby("Year").agg({"Profit": "sum", "AreaHa": "sum"}).reset_index()
+                    yearly_stats = forecast_sorted.groupby("year").agg({"profit_total": "sum"}).reset_index()
+                    field_areas = {f.name: float(f.area_ha) for f in fields}
+                    total_area = sum(field_areas.values())
+                    yearly_stats["profit_per_ha"] = yearly_stats["profit_total"] / total_area if total_area > 0 else 0
+                    yearly_stats = yearly_stats.sort_values("year", key=lambda x: x.map({y: i for i, y in enumerate(all_years_ordered)}))
+                    
                     if len(yearly_stats) >= 2:
                         first_year_stats = yearly_stats.iloc[0]
                         second_year_stats = yearly_stats.iloc[1]
-                        first_year_profit_ha = first_year_stats["Profit"] / first_year_stats["AreaHa"] if first_year_stats["AreaHa"] > 0 else 0
-                        second_year_profit_ha = second_year_stats["Profit"] / second_year_stats["AreaHa"] if second_year_stats["AreaHa"] > 0 else 0
+                        first_year_profit_ha = first_year_stats["profit_per_ha"]
+                        second_year_profit_ha = second_year_stats["profit_per_ha"]
                         
                         if second_year_profit_ha < first_year_profit_ha:
                             st.info("Peļņa zemāka rotācijas gadā – galvenā kultūra nav atļauta pēc iepriekšējā gada. Tas ir normāli un atbilst agronomiskajai loģikai.")
@@ -882,8 +949,8 @@ def show_dashboard_section():
                     # Vienam laukam
                     first_year_data = forecast_sorted.iloc[0]
                     second_year_data = forecast_sorted.iloc[1]
-                    first_year_profit_ha = first_year_data["ProfitPerHa"]
-                    second_year_profit_ha = second_year_data["ProfitPerHa"]
+                    first_year_profit_ha = first_year_data["profit_per_ha"]
+                    second_year_profit_ha = second_year_data["profit_per_ha"]
                     
                     if second_year_profit_ha < first_year_profit_ha:
                         st.info("Peļņa zemāka rotācijas gadā – galvenā kultūra nav atļauta pēc iepriekšējā gada. Tas ir normāli un atbilst agronomiskajai loģikai.")
@@ -891,8 +958,8 @@ def show_dashboard_section():
         # metrikas zem grafikiem
         st.divider()
         # Tikai prognozētie gadi metrikām
-        forecast_total_profit = forecast_df["Profit"].sum() if not forecast_df.empty else 0
-        forecast_avg_profit_per_ha = (forecast_df["ProfitPerHa"].mean()) if not forecast_df.empty and len(forecast_df) > 0 else 0
+        forecast_total_profit = forecast_df["profit_total"].sum() if not forecast_df.empty else 0
+        forecast_avg_profit_per_ha = (forecast_df["profit_per_ha"].mean()) if not forecast_df.empty and len(forecast_df) > 0 else 0
 
         m1, m2, m3 = st.columns(3)
         with m1:
@@ -900,7 +967,7 @@ def show_dashboard_section():
         with m2:
             st.metric("Vidēji EUR/ha", f"{forecast_avg_profit_per_ha:,.0f} EUR/ha")
         with m3:
-            st.metric("Gadu skaits", forecast_df["Year"].nunique() if not forecast_df.empty else 0)
+            st.metric("Gadu skaits", forecast_df["year"].nunique() if not forecast_df.empty else 0)
         
         # Cenu avota informācija
         _show_price_source_info()
