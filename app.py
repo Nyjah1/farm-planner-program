@@ -3,8 +3,11 @@ Streamlit Cloud entry point.
 This file imports and runs the Streamlit UI from ui_app.py.
 """
 
-import ui_app
+import streamlit as st
 
-# Streamlit Cloud will execute this file, which will run the UI
-# ui_app.py handles all initialization and main() call
-ui_app.main()
+try:
+    import ui_app
+    ui_app.main()
+except Exception as e:
+    st.error("Startēšanās kļūda")
+    st.exception(e)

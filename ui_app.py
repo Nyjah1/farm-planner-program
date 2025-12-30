@@ -3052,6 +3052,17 @@ def main():
     """Galvenā funkcija."""
     try:
         # Pārbauda, vai storage ir inicializēts
+        # Globālā inicializācija jau notiek faila augšā, bet ja tā neizdevās, mēģinām vēlreiz
+        if 'storage' not in st.session_state:
+            try:
+                st.session_state.storage = Storage()
+                ensure_auth_tables(st.session_state.storage)
+                ensure_admin_user(st.session_state.storage)
+            except Exception as init_error:
+                st.error(f"Kļūda inicializējot sistēmu: {init_error}")
+                st.exception(init_error)
+                return
+        
         if 'storage' not in st.session_state:
             st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu.")
             return
