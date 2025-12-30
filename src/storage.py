@@ -61,15 +61,38 @@ class Storage:
         
         Args:
             db_path: Ceļš uz SQLite datubāzi (tiek ignorēts, ja izmanto PostgreSQL)
+            
+        Raises:
+            ValueError: Ja datubāzes inicializācija neizdodas
         """
         self.db_path = db_path
+        self._init_successful = False
         if not is_postgres():
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
+        try:
+            self._init_db()
+            self._init_successful = True
+        except Exception as e:
+            self._init_successful = False
+            error_msg = str(e)
+            if "DB_URL" in error_msg or "postgresql" in error_msg.lower():
+                # DB URL problēma
+                raise ValueError(
+                    "DB_URL nav iestatīts pareizi. "
+                    "DB_URL jābūt PostgreSQL connection string, kas sākas ar 'postgresql://' vai 'postgres://'. "
+                    "Atver Streamlit Cloud Settings → Secrets un ieliec pareizu DB_URL vai noņem DB_URL, lai izmantotu SQLite."
+                ) from e
+            else:
+                # Cita datubāzes kļūda
+                raise ValueError(
+                    f"Kļūda inicializējot datubāzi: {error_msg}. "
+                    "Pārbaudiet datubāzes savienojumu un mēģiniet vēlreiz."
+                ) from e
     
     def _init_db(self):
-        """Izveido tabulas, ja tās nav."""
-        # Users tabula ar PRIMARY KEY (bez foreign key constraints sākumā)
+        """Izveido tabulas, ja tās nav. Ja kāda tabula neizdodas, pārtrauc ar kļūdu."""
+        # Users tabula ar PRIMARY KEY - JĀBŪT PIRMAJAI
+        # Izveido ar vienu transakciju, lai nodrošinātu, ka PRIMARY KEY ir definēts
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
@@ -91,10 +114,13 @@ class Storage:
                         )
                     """)
         except Exception as e:
-            print(f"Kļūda izveidojot users tabulu: {e}")
+            raise RuntimeError(f"Kļūda izveidojot users tabulu: {e}") from e
         
         # Migrācija: nodrošina, ka users.id ir PRIMARY KEY (jāizpilda pirms citām tabulām)
-        self._migrate_users_table()
+        try:
+            self._migrate_users_table()
+        except Exception as e:
+            raise RuntimeError(f"Kļūda migrējot users tabulu: {e}") from e
         
         # User sessions tabula (bez foreign key constraints sākumā)
         try:
@@ -121,7 +147,7 @@ class Storage:
                         )
                     """)
         except Exception as e:
-            print(f"Kļūda izveidojot user_sessions tabulu: {e}")
+            raise RuntimeError(f"Kļūda izveidojot user_sessions tabulu: {e}") from e
         
         # Auth tokens tabula (bez foreign key constraints sākumā)
         try:
@@ -148,7 +174,7 @@ class Storage:
                         )
                     """)
         except Exception as e:
-            print(f"Kļūda izveidojot auth_tokens tabulu: {e}")
+            raise RuntimeError(f"Kļūda izveidojot auth_tokens tabulu: {e}") from e
         
         # Lauku tabula (bez foreign key constraints sākumā)
         try:
@@ -189,7 +215,7 @@ class Storage:
                         )
                     """)
         except Exception as e:
-            print(f"Kļūda izveidojot fields tabulu: {e}")
+            raise RuntimeError(f"Kļūda izveidojot fields tabulu: {e}") from e
         
         # Stādīšanas ierakstu tabula (bez foreign key constraints sākumā)
         try:
@@ -215,19 +241,31 @@ class Storage:
                         )
                     """)
         except Exception as e:
-            print(f"Kļūda izveidojot plantings tabulu: {e}")
+            raise RuntimeError(f"Kļūda izveidojot plantings tabulu: {e}") from e
         
         # Migrācija: pievieno kolonnas, ja tās neeksistē
-        self._migrate_columns()
+        try:
+            self._migrate_columns()
+        except Exception as e:
+            raise RuntimeError(f"Kļūda migrējot kolonnas: {e}") from e
         
         # Migrācija: pievieno foreign key constraints (pēc tam, kad users tabula ir pareizi konfigurēta)
-        self._migrate_foreign_keys()
+        try:
+            self._migrate_foreign_keys()
+        except Exception as e:
+            raise RuntimeError(f"Kļūda migrējot foreign key constraints: {e}") from e
         
         # Izpilda migrāciju augsnes vērtībām
-        self.migrate_soil_values()
+        try:
+            self.migrate_soil_values()
+        except Exception as e:
+            raise RuntimeError(f"Kļūda migrējot augsnes vērtības: {e}") from e
         
         # Migrācija: izveido admin user, ja nav neviena lietotāja
-        self._ensure_admin_user()
+        try:
+            self._ensure_admin_user()
+        except Exception as e:
+            raise RuntimeError(f"Kļūda izveidojot admin lietotāju: {e}") from e
     
     def _migrate_users_table(self):
         """Migrācija: nodrošina, ka users.id ir PRIMARY KEY un username ir UNIQUE."""
@@ -332,11 +370,9 @@ class Storage:
                     has_pk = cursor.fetchone() is not None
                     
                     if not has_pk:
-                        print("Brīdinājums: users.id nav PRIMARY KEY, nevar pievienot foreign key constraints")
-                        return
+                        raise RuntimeError("users.id nav PRIMARY KEY, nevar pievienot foreign key constraints")
             except Exception as e:
-                print(f"Migrācija users PRIMARY KEY pārbaude: {e}")
-                return
+                raise RuntimeError(f"Kļūda pārbaudot users PRIMARY KEY: {e}") from e
             
             # Pievieno foreign key constraints, ja tās nav (katra savā transakcijā)
             

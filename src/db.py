@@ -66,17 +66,17 @@ def _is_valid_database_url(url: str) -> bool:
     if not url:
         return False
     
-    # Pārbauda, vai nav acīmredzami nepareizs (piemēram, satur "npx" bez "=")
-    # Ja satur "npx" bet nav PostgreSQL URL, tas ir nepareizs
-    if 'npx' in url.lower() and not (url.startswith('postgresql://') or url.startswith('postgres://')):
-        print(f"Brīdinājums: DATABASE_URL satur 'npx', bet nav PostgreSQL URL formāts: {url[:50]}...")
-        return False
+    # Pārbauda, vai nav acīmredzami nepareizs (piemēram, satur "npx" vai citas komandas)
+    # Ja satur "npx", "npm", "neonctl" vai citas komandas, tas ir nepareizs
+    invalid_keywords = ['npx', 'npm', 'neonctl', 'init', 'run ', 'exec']
+    url_lower = url.lower()
+    for keyword in invalid_keywords:
+        if keyword in url_lower:
+            return False
     
     # Validācija: jāsākas ar postgresql:// vai postgres://
     if not (url.startswith('postgresql://') or url.startswith('postgres://')):
-        # Ja nav PostgreSQL URL, bet ir iestatīts, tas varētu būt kļūda
-        # Bet atstājam, lai psycopg2 pats pārbauda (var būt citi formāti)
-        pass
+        return False
     
     return True
 
@@ -95,11 +95,14 @@ def get_connection() -> DBConnection:
     """
     Atgriež datubāzes savienojumu.
     
-    Ja DATABASE_URL ir iestatīts, izmanto PostgreSQL (psycopg2).
+    Ja DATABASE_URL ir iestatīts un derīgs, izmanto PostgreSQL (psycopg2).
     Pretējā gadījumā izmanto SQLite.
     
     Returns:
         sqlite3.Connection vai psycopg2.connection
+        
+    Raises:
+        ValueError: Ja DATABASE_URL ir iestatīts, bet nav derīgs formāts
     """
     database_url = get_database_url()
     
@@ -114,9 +117,9 @@ def get_connection() -> DBConnection:
         # Pārbauda, vai URL ir derīgs
         if not _is_valid_database_url(database_url):
             raise ValueError(
-                f"Nevalīds DATABASE_URL formāts. "
-                f"Paredzēts formāts: postgresql://user:password@host:port/database "
-                f"Vai noņemiet DATABASE_URL, lai izmantotu SQLite."
+                "DB_URL nav iestatīts pareizi. "
+                "DB_URL jābūt PostgreSQL connection string, kas sākas ar 'postgresql://' vai 'postgres://'. "
+                "Atver Streamlit Cloud Settings → Secrets un ieliec pareizu DB_URL vai noņem DB_URL, lai izmantotu SQLite."
             )
         
         try:
@@ -127,7 +130,8 @@ def get_connection() -> DBConnection:
             # Ja neizdodas savienoties, izvada labāku kļūdas ziņojumu
             raise ValueError(
                 f"Neizdevās savienoties ar PostgreSQL datubāzi. "
-                f"Pārbaudiet DATABASE_URL. Kļūda: {e}"
+                f"Pārbaudiet DB_URL Streamlit Cloud Settings → Secrets. "
+                f"Kļūda: {e}"
             ) from e
     else:
         # SQLite (fallback)

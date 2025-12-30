@@ -2690,7 +2690,28 @@ def main():
         if 'storage' not in st.session_state:
             try:
                 st.session_state.storage = Storage()
+            except ValueError as init_error:
+                # DB URL vai datubāzes kļūda - parāda saprotamu kļūdu ar instrukcijām
+                error_msg = str(init_error)
+                st.error("**Kļūda inicializējot datubāzi**")
+                st.markdown(f"""
+                **Problēma:** {error_msg}
+                
+                **Risinājums:**
+                1. Atver Streamlit Cloud Settings → Secrets
+                2. Pārbaudiet vai DB_URL ir iestatīts pareizi
+                3. DB_URL jābūt PostgreSQL connection string, kas sākas ar `postgresql://` vai `postgres://`
+                4. Ja DB_URL nav nepieciešams, noņemiet to, lai izmantotu SQLite
+                
+                **Piemērs pareiza DB_URL:**
+                ```
+                postgresql://user:password@host:port/database
+                ```
+                """)
+                st.exception(init_error)
+                return
             except Exception as init_error:
+                # Cita kļūda
                 st.error(f"Kļūda inicializējot sistēmu: {init_error}")
                 st.exception(init_error)
                 return
