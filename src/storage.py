@@ -70,68 +70,126 @@ class Storage:
     def _init_db(self):
         """Izveido tabulas, ja tās nav."""
         with get_db_cursor() as cursor:
-            # Users tabula
-            id_type = _get_auto_increment()
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS users (
-                    id {id_type},
-                    username TEXT NOT NULL UNIQUE,
-                    password_hash TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )
-            """)
+            # Users tabula ar PRIMARY KEY
+            if is_postgres():
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id BIGSERIAL PRIMARY KEY,
+                        username TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT now()
+                    )
+                """)
+            else:
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS users (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        username TEXT NOT NULL UNIQUE,
+                        password_hash TEXT NOT NULL,
+                        created_at TEXT NOT NULL
+                    )
+                """)
             
             # User sessions tabula (vecā, saglabāta backward compatibility)
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS user_sessions (
-                    id {id_type},
-                    user_id INTEGER NOT NULL,
-                    session_token TEXT NOT NULL UNIQUE,
-                    created_at TEXT NOT NULL,
-                    expires_at TEXT NOT NULL
-                )
-            """)
+            if is_postgres():
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS user_sessions (
+                        id BIGSERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        session_token TEXT NOT NULL UNIQUE,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        expires_at TIMESTAMPTZ NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )
+                """)
+            else:
+                id_type = _get_auto_increment()
+                cursor.execute(f"""
+                    CREATE TABLE IF NOT EXISTS user_sessions (
+                        id {id_type},
+                        user_id INTEGER NOT NULL,
+                        session_token TEXT NOT NULL UNIQUE,
+                        created_at TEXT NOT NULL,
+                        expires_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )
+                """)
             
             # Auth tokens tabula (remember me tokens ar hash)
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS auth_tokens (
-                    id {id_type},
-                    user_id INTEGER NOT NULL,
-                    token_hash TEXT NOT NULL UNIQUE,
-                    expires_at TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                )
-            """)
+            if is_postgres():
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS auth_tokens (
+                        id BIGSERIAL PRIMARY KEY,
+                        user_id BIGINT NOT NULL,
+                        token_hash TEXT NOT NULL UNIQUE,
+                        expires_at TIMESTAMPTZ NOT NULL,
+                        created_at TIMESTAMPTZ DEFAULT now(),
+                        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )
+                """)
+            else:
+                id_type = _get_auto_increment()
+                cursor.execute(f"""
+                    CREATE TABLE IF NOT EXISTS auth_tokens (
+                        id {id_type},
+                        user_id INTEGER NOT NULL,
+                        token_hash TEXT NOT NULL UNIQUE,
+                        expires_at TEXT NOT NULL,
+                        created_at TEXT NOT NULL,
+                        FOREIGN KEY (user_id) REFERENCES users(id)
+                    )
+                """)
             
             # Lauku tabula
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS fields (
-                    id {id_type},
-                    owner_user_id INTEGER NOT NULL,
-                    name TEXT NOT NULL,
-                    area_ha REAL NOT NULL CHECK(area_ha > 0),
-                    soil TEXT NOT NULL,
-                    block_code TEXT,
-                    lad_area_ha REAL,
-                    lad_last_edited TEXT,
-                    lad_last_synced TEXT,
-                    rent_eur_ha REAL DEFAULT 0.0,
-                    ph REAL,
-                    is_organic INTEGER
-                )
-            """)
+            if is_postgres():
+                cursor.execute("""
+                    CREATE TABLE IF NOT EXISTS fields (
+                        id BIGSERIAL PRIMARY KEY,
+                        owner_user_id BIGINT NOT NULL,
+                        name TEXT NOT NULL,
+                        area_ha REAL NOT NULL CHECK(area_ha > 0),
+                        soil TEXT NOT NULL,
+                        block_code TEXT,
+                        lad_area_ha REAL,
+                        lad_last_edited TEXT,
+                        lad_last_synced TEXT,
+                        rent_eur_ha REAL DEFAULT 0.0,
+                        ph REAL,
+                        is_organic INTEGER,
+                        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+                    )
+                """)
+            else:
+                id_type = _get_auto_increment()
+                cursor.execute(f"""
+                    CREATE TABLE IF NOT EXISTS fields (
+                        id {id_type},
+                        owner_user_id INTEGER NOT NULL,
+                        name TEXT NOT NULL,
+                        area_ha REAL NOT NULL CHECK(area_ha > 0),
+                        soil TEXT NOT NULL,
+                        block_code TEXT,
+                        lad_area_ha REAL,
+                        lad_last_edited TEXT,
+                        lad_last_synced TEXT,
+                        rent_eur_ha REAL DEFAULT 0.0,
+                        ph REAL,
+                        is_organic INTEGER,
+                        FOREIGN KEY (owner_user_id) REFERENCES users(id)
+                    )
+                """)
             
             # Stādīšanas ierakstu tabula
             if is_postgres():
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS plantings (
-                        field_id INTEGER NOT NULL,
+                        field_id BIGINT NOT NULL,
                         year INTEGER NOT NULL,
                         crop TEXT NOT NULL,
-                        owner_user_id INTEGER NOT NULL,
+                        owner_user_id BIGINT NOT NULL,
                         PRIMARY KEY (field_id, year),
-                        FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
+                        FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE,
+                        FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
                     )
                 """)
             else:
@@ -142,18 +200,164 @@ class Storage:
                         crop TEXT NOT NULL,
                         owner_user_id INTEGER NOT NULL,
                         PRIMARY KEY (field_id, year),
-                        FOREIGN KEY (field_id) REFERENCES fields(id)
+                        FOREIGN KEY (field_id) REFERENCES fields(id),
+                        FOREIGN KEY (owner_user_id) REFERENCES users(id)
                     )
                 """)
             
+            # Migrācija: nodrošina, ka users.id ir PRIMARY KEY
+            self._migrate_users_table()
+            
             # Migrācija: pievieno kolonnas, ja tās neeksistē
             self._migrate_columns()
+            
+            # Migrācija: pievieno foreign key constraints
+            self._migrate_foreign_keys()
             
             # Izpilda migrāciju augsnes vērtībām
             self.migrate_soil_values()
             
             # Migrācija: izveido admin user, ja nav neviena lietotāja
             self._ensure_admin_user()
+    
+    def _migrate_users_table(self):
+        """Migrācija: nodrošina, ka users.id ir PRIMARY KEY un username ir UNIQUE."""
+        with get_db_cursor() as cursor:
+            if is_postgres():
+                # PostgreSQL: pārbauda, vai id ir PRIMARY KEY
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'users' 
+                        AND constraint_type = 'PRIMARY KEY'
+                    """)
+                    if not cursor.fetchone():
+                        # Nav PRIMARY KEY - pievieno
+                        cursor.execute("ALTER TABLE users ADD PRIMARY KEY (id)")
+                except Exception as e:
+                    print(f"Migrācija users PRIMARY KEY: {e}")
+                
+                # Pārbauda, vai username ir UNIQUE
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'users' 
+                        AND constraint_type = 'UNIQUE'
+                        AND constraint_name LIKE '%username%'
+                    """)
+                    if not cursor.fetchone():
+                        # Nav UNIQUE constraint - pievieno
+                        cursor.execute("ALTER TABLE users ADD CONSTRAINT users_username_unique UNIQUE (username)")
+                except Exception as e:
+                    print(f"Migrācija users UNIQUE: {e}")
+                
+                # Pārbauda, vai created_at ir ar DEFAULT
+                try:
+                    cursor.execute("""
+                        SELECT column_default 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'users' 
+                        AND column_name = 'created_at'
+                    """)
+                    row = cursor.fetchone()
+                    if not row or not row[0]:
+                        # Nav DEFAULT - pievieno
+                        cursor.execute("ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()")
+                except Exception as e:
+                    print(f"Migrācija users created_at DEFAULT: {e}")
+            else:
+                # SQLite: PRIMARY KEY jau ir definēts ar INTEGER PRIMARY KEY AUTOINCREMENT
+                # Pārbauda, vai username ir UNIQUE (jau ir definēts ar UNIQUE constraint)
+                pass
+    
+    def _migrate_foreign_keys(self):
+        """Migrācija: pievieno foreign key constraints uz users(id)."""
+        with get_db_cursor() as cursor:
+            if is_postgres():
+                # PostgreSQL: pievieno foreign key constraints, ja tās nav
+                
+                # auth_tokens.user_id -> users.id
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'auth_tokens' 
+                        AND constraint_type = 'FOREIGN KEY'
+                        AND constraint_name LIKE '%user_id%'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            ALTER TABLE auth_tokens 
+                            ADD CONSTRAINT auth_tokens_user_id_fkey 
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        """)
+                except Exception as e:
+                    print(f"Migrācija auth_tokens FK: {e}")
+                
+                # fields.owner_user_id -> users.id
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'fields' 
+                        AND constraint_type = 'FOREIGN KEY'
+                        AND constraint_name LIKE '%owner_user_id%'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            ALTER TABLE fields 
+                            ADD CONSTRAINT fields_owner_user_id_fkey 
+                            FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+                        """)
+                except Exception as e:
+                    print(f"Migrācija fields FK: {e}")
+                
+                # plantings.owner_user_id -> users.id
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'plantings' 
+                        AND constraint_type = 'FOREIGN KEY'
+                        AND constraint_name LIKE '%owner_user_id%'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            ALTER TABLE plantings 
+                            ADD CONSTRAINT plantings_owner_user_id_fkey 
+                            FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
+                        """)
+                except Exception as e:
+                    print(f"Migrācija plantings FK: {e}")
+                
+                # user_sessions.user_id -> users.id
+                try:
+                    cursor.execute("""
+                        SELECT constraint_name 
+                        FROM information_schema.table_constraints 
+                        WHERE table_name = 'user_sessions' 
+                        AND constraint_type = 'FOREIGN KEY'
+                        AND constraint_name LIKE '%user_id%'
+                    """)
+                    if not cursor.fetchone():
+                        cursor.execute("""
+                            ALTER TABLE user_sessions 
+                            ADD CONSTRAINT user_sessions_user_id_fkey 
+                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+                        """)
+                except Exception as e:
+                    print(f"Migrācija user_sessions FK: {e}")
+            else:
+                # SQLite: foreign key constraints tiek pievienotas tabulas izveides laikā
+                # Bet var mēģināt pievienot arī pēc tam
+                try:
+                    # SQLite nevar pievienot foreign key pēc tabulas izveides viegli
+                    # Bet var pārbaudīt, vai tabulas ir pareizi definētas
+                    pass
+                except Exception as e:
+                    print(f"Migrācija SQLite FK: {e}")
     
     def _migrate_columns(self):
         """Pievieno jaunas kolonnas, ja tās neeksistē."""
