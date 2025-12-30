@@ -1373,8 +1373,7 @@ def plan_for_years(
     favorites_plus_group: bool = False,
     include_crops_without_price: bool = False,
     include_vegetables: bool = False,
-    allowed_groups: Optional[List[str]] = None,
-    user_id: Optional[int] = None
+    allowed_groups: Optional[List[str]] = None
 ) -> Dict:
     """
     Plāno kultūras vairākiem gadiem uz priekšu.
@@ -1536,8 +1535,7 @@ def plan_for_years_lookahead(
     favorites_plus_group: bool = False,
     include_crops_without_price: bool = False,
     include_vegetables: bool = False,
-    allowed_groups: Optional[List[str]] = None,
-    user_id: Optional[int] = None
+    allowed_groups: Optional[List[str]] = None
 ) -> Dict:
     """
     Plāno kultūras vairākiem gadiem uz priekšu, izmantojot lookahead algoritmu.
