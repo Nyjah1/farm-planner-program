@@ -7,5 +7,5 @@ requests
 plotly
 bcrypt
 psycopg2-binary
-streamlit-cookies-manager==0.2.0
+extra-streamlit-components>=0.1.60
 

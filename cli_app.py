@@ -1,3 +1,19 @@
+"""
+CLI aplikācija Farm Planner.
+Šis fails ir tikai CLI versijai un NEDRĪKST tikt importēts Streamlit vidē.
+
+IMPORTANT: This file should NEVER be imported by Streamlit or run in Streamlit Cloud.
+It contains input() calls that will block Streamlit execution.
+"""
+import sys
+
+# Prevent execution in Streamlit environment
+if 'streamlit' in sys.modules:
+    raise RuntimeError(
+        "cli_app.py cannot be imported in Streamlit environment. "
+        "Use app.py or ui_app.py for Streamlit."
+    )
+
 from datetime import datetime
 
 from src.ai_explain import explain_recommendation
@@ -6,9 +22,20 @@ from src.planner import load_catalog, recommend_for_field, recommend_with_scenar
 from src.storage import Storage
 
 
-def main():
+def main_cli():
     """Galvenā CLI izvēlne."""
     storage = Storage()
+    
+    # CLI versijai izveidojam demo lietotāju vai izmantojam pirmo lietotāju
+    # Pārbauda, vai ir lietotāji
+    from src.db import get_db_cursor, _get_placeholder
+    with get_db_cursor() as cursor:
+        cursor.execute("SELECT id FROM users ORDER BY id LIMIT 1")
+        row = cursor.fetchone()
+        if not row:
+            print("Nav lietotāju! Vispirms izveidojiet lietotāju caur Streamlit UI.")
+            return
+        user_id = row[0]
     
     while True:
         print("\n=== Farm Planner ===")
@@ -25,20 +52,20 @@ def main():
             print("Uz redzēšanos!")
             break
         elif choice == "1":
-            add_field(storage)
+            add_field(storage, user_id)
         elif choice == "2":
-            list_fields(storage)
+            list_fields(storage, user_id)
         elif choice == "3":
-            add_planting(storage)
+            add_planting(storage, user_id)
         elif choice == "4":
-            list_plantings_by_field(storage)
+            list_plantings_by_field(storage, user_id)
         elif choice == "5":
-            recommend_crop_for_field(storage)
+            recommend_crop_for_field(storage, user_id)
         else:
             print("Nepareiza izvēle! Lūdzu, izvēlieties no 0-5.")
 
 
-def add_field(storage: Storage):
+def add_field(storage: Storage, user_id: int):
     """Pievieno jaunu lauku."""
     try:
         name = input("Lauka nosaukums: ").strip()
@@ -61,17 +88,17 @@ def add_field(storage: Storage):
             print("Kļūda: Nepareiza augsnes veida izvēle!")
             return
         
-        field = FieldModel(id=0, name=name, area_ha=area_ha, soil=soil_map[soil_choice])
-        result = storage.add_field(field)
+        field = FieldModel(id=0, name=name, area_ha=area_ha, soil=soil_map[soil_choice], owner_user_id=user_id)
+        result = storage.add_field(field, user_id)
         print(f"Lauks pievienots ar ID: {result.id}")
     except Exception as e:
         print(f"Kļūda: {e}")
 
 
-def list_fields(storage: Storage):
+def list_fields(storage: Storage, user_id: int):
     """Parāda visus laukus."""
     try:
-        fields = storage.list_fields()
+        fields = storage.list_fields(user_id)
         if not fields:
             print("Nav pievienotu lauku.")
             return
@@ -80,12 +107,12 @@ def list_fields(storage: Storage):
         print("-" * 60)
         for field in fields:
             print(f"ID: {field.id} | Nosaukums: {field.name} | "
-                  f"Platība: {field.area_ha} ha | Augsne: {field.soil.value}")
+                  f"Platība: {field.area_ha} ha | Augsne: {field.soil.label}")
     except Exception as e:
         print(f"Kļūda: {e}")
 
 
-def add_planting(storage: Storage):
+def add_planting(storage: Storage, user_id: int):
     """Pievieno sējumu vēsturi."""
     try:
         field_id_str = input("Lauka ID: ").strip()
@@ -107,14 +134,14 @@ def add_planting(storage: Storage):
             print("Kļūda: Kultūras nosaukums nevar būt tukšs!")
             return
         
-        planting = PlantingRecord(field_id=field_id, year=year, crop=crop)
-        storage.add_planting(planting)
+        planting = PlantingRecord(field_id=field_id, year=year, crop=crop, owner_user_id=user_id)
+        storage.add_planting(planting, user_id)
         print("Sējuma vēsture pievienota!")
     except Exception as e:
         print(f"Kļūda: {e}")
 
 
-def list_plantings_by_field(storage: Storage):
+def list_plantings_by_field(storage: Storage, user_id: int):
     """Parāda sējumu vēsturi pēc lauka ID."""
     try:
         field_id_str = input("Lauka ID: ").strip()
@@ -124,7 +151,7 @@ def list_plantings_by_field(storage: Storage):
             print("Kļūda: Lauka ID jābūt skaitlim!")
             return
         
-        all_plantings = storage.list_plantings()
+        all_plantings = storage.list_plantings(user_id)
         filtered = [p for p in all_plantings if p.field_id == field_id]
         
         if not filtered:
@@ -139,7 +166,7 @@ def list_plantings_by_field(storage: Storage):
         print(f"Kļūda: {e}")
 
 
-def recommend_crop_for_field(storage: Storage):
+def recommend_crop_for_field(storage: Storage, user_id: int):
     """Ieteic ko sēt nākamajam gadam pēc lauka ID."""
     try:
         # Ielādē kultūru katalogu
@@ -154,14 +181,14 @@ def recommend_crop_for_field(storage: Storage):
             return
         
         # Iegūst lauku no DB
-        fields = storage.list_fields()
+        fields = storage.list_fields(user_id)
         field = next((f for f in fields if f.id == field_id), None)
         if not field:
             print(f"Kļūda: Lauks ar ID {field_id} nav atrasts!")
             return
         
         # Iegūst visu sējumu vēsturi
-        history = storage.list_plantings()
+        history = storage.list_plantings(user_id)
         
         # Pārbauda, vai ir vēsture
         field_history = [p for p in history if p.field_id == field_id]
@@ -250,5 +277,7 @@ def recommend_crop_for_field(storage: Storage):
 
 
 if __name__ == "__main__":
-    main()
+    # CLI versija - tikai, ja fails tiek palaists tieši
+    # Streamlit NEDRĪKST importēt šo failu
+    main_cli()
 

@@ -27,7 +27,7 @@ from src.prices import load_prices_with_fallback, load_prices_csv
 from src.price_provider import get_price_for_crop
 from src.profit import _safe_yield_for_soil, profit_eur_detailed
 from src.analytics import crop_area_by_year
-from src.auth import login, register, logout, check_session_cookie
+from src.auth import login, register, logout, require_login
 import json
 
 # Konfigurācija - JĀBŪT PIRMAJAI Streamlit komandai
@@ -3098,8 +3098,10 @@ def show_login():
                     st.error("Lūdzu, aizpildiet visus laukus.")
                 elif password != password_repeat:
                     st.error("Paroles nesakrīt.")
+                elif len(password) < 8:
+                    st.error("Parolei jābūt vismaz 8 simbolu garai.")
                 else:
-                    user = register(storage, username, password, remember_me=remember_me)
+                    user = register(storage, username, password, display_name=None, remember_me=remember_me)
                     if user:
                         st.success("Konts izveidots veiksmīgi!")
                         st.rerun()
@@ -3126,23 +3128,11 @@ def main():
         
         storage = st.session_state.storage
         
-        # Pārbauda, vai lietotājs ir ielogojies
-        if "user" not in st.session_state:
-            # Mēģina atjaunot session no cookie
-            try:
-                user_id = check_session_cookie(storage)
-                if user_id:
-                    st.session_state["user"] = user_id
-                else:
-                    show_login()
-                    return
-            except Exception as cookie_error:
-                # Ja cookie pārbaude neizdodas, vienkārši rāda login
-                print(f"Cookie pārbaudes kļūda: {cookie_error}")
-                import traceback
-                print(traceback.format_exc())
-                show_login()
-                return
+        # Pārbauda, vai lietotājs ir ielogots (izmantojot require_login)
+        current_user = require_login(storage)
+        if not current_user:
+            show_login()
+            return
     except Exception as e:
         st.error(f"Kļūda: {e}")
         st.exception(e)
@@ -3200,12 +3190,10 @@ def main():
     # Sidebar
     with st.sidebar:
         # Lietotāja informācija augšā
-        user_id = st.session_state["user"]
-        user = storage.get_user_by_id(user_id)
-        if user:
-            st.markdown(f"**Lietotājs:** {user.username}")
+        username = st.session_state.get("username", "Nav")
+        st.markdown(f"**Lietotājs:** {username}")
         
-        if st.button("Logout", use_container_width=True, key="logout_btn"):
+        if st.button("Iziet", use_container_width=True, key="logout_btn"):
             logout(storage)
             st.rerun()
         

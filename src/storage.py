@@ -81,7 +81,7 @@ class Storage:
                 )
             """)
             
-            # User sessions tabula
+            # User sessions tabula (vecā, saglabāta backward compatibility)
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS user_sessions (
                     id {id_type},
@@ -89,6 +89,18 @@ class Storage:
                     session_token TEXT NOT NULL UNIQUE,
                     created_at TEXT NOT NULL,
                     expires_at TEXT NOT NULL
+                )
+            """)
+            
+            # Auth tokens tabula (remember me tokens ar hash)
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS auth_tokens (
+                    id {id_type},
+                    user_id INTEGER NOT NULL,
+                    token_hash TEXT NOT NULL UNIQUE,
+                    expires_at TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                 )
             """)
             
@@ -252,7 +264,7 @@ class Storage:
                     (new_code, old_code)
                 )
     
-    def create_user(self, username: str, password: str) -> Optional[UserModel]:
+    def create_user(self, username: str, password: str, display_name: Optional[str] = None) -> Optional[UserModel]:
         """Izveido jaunu lietotāju."""
         placeholder = _get_placeholder()
         
@@ -269,11 +281,18 @@ class Storage:
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute(
-                f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder})",
-                (username, password_hash, created_at)
-            )
-            user_id = cursor.lastrowid
+            if is_postgres():
+                cursor.execute(
+                    f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}) RETURNING id",
+                    (username, password_hash, created_at)
+                )
+                user_id = cursor.fetchone()[0]
+            else:
+                cursor.execute(
+                    f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder})",
+                    (username, password_hash, created_at)
+                )
+                user_id = cursor.lastrowid
             conn.commit()
             cursor.close()
             return UserModel(id=user_id, username=username, password_hash=password_hash, created_at=created_at)
@@ -382,6 +401,77 @@ class Storage:
             cursor.execute(
                 f"DELETE FROM user_sessions WHERE session_token = {placeholder}",
                 (session_token,)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def create_remember_token(self, user_id: int, token_hash: str, expires_at: str) -> bool:
+        """Izveido jaunu remember token ierakstu (token_hash jau ir hash)."""
+        placeholder = _get_placeholder()
+        created_at = datetime.now().isoformat()
+        
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"INSERT INTO auth_tokens (user_id, token_hash, expires_at, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                (user_id, token_hash, expires_at, created_at)
+            )
+            conn.commit()
+            cursor.close()
+            return True
+        except Exception:
+            conn.rollback()
+            return False
+        finally:
+            conn.close()
+    
+    def verify_remember_token(self, token_hash: str) -> Optional[int]:
+        """Pārbauda, vai token_hash ir derīgs un atgriež user_id."""
+        placeholder = _get_placeholder()
+        
+        with get_db_cursor() as cursor:
+            cursor.execute(
+                f"SELECT user_id, expires_at FROM auth_tokens WHERE token_hash = {placeholder}",
+                (token_hash,)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            user_id, expires_at_str = row
+            
+            # Pārbauda, vai token nav beidzies
+            try:
+                expires_at = datetime.fromisoformat(expires_at_str)
+                if datetime.now() > expires_at:
+                    # Token beidzies - izdzēš to
+                    self.revoke_remember_token(token_hash)
+                    return None
+            except (ValueError, TypeError):
+                # Nevar parsēt datumu - uzskata par nederīgu
+                self.revoke_remember_token(token_hash)
+                return None
+            
+            return user_id
+    
+    def revoke_remember_token(self, token_hash: str) -> bool:
+        """Invalidē remember token (izdzēš no DB)."""
+        placeholder = _get_placeholder()
+        
+        conn = get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"DELETE FROM auth_tokens WHERE token_hash = {placeholder}",
+                (token_hash,)
             )
             conn.commit()
             cursor.close()

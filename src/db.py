@@ -4,7 +4,7 @@ Datu bāzes savienojuma modulis ar atbalstu gan SQLite, gan PostgreSQL.
 import os
 import sqlite3
 from pathlib import Path
-from typing import Union
+from typing import Union, Optional
 from contextlib import contextmanager
 
 try:
@@ -19,13 +19,24 @@ except ImportError:
 DBConnection = Union[sqlite3.Connection, psycopg2_connection]
 
 
-def get_database_url() -> str:
+def get_database_url() -> Optional[str]:
     """
-    Atgriež DATABASE_URL no vides mainīgā.
+    Atgriež DATABASE_URL no st.secrets vai vides mainīgā.
+    
+    Vispirms meklē st.secrets["DB_URL"], pēc tam os.environ["DATABASE_URL"].
     
     Returns:
         DATABASE_URL string vai None, ja nav iestatīts
     """
+    # Mēģina iegūt no Streamlit secrets (Streamlit Cloud)
+    try:
+        import streamlit as st
+        if hasattr(st, 'secrets') and 'DB_URL' in st.secrets:
+            return st.secrets['DB_URL']
+    except Exception:
+        pass
+    
+    # Fallback uz vides mainīgo
     return os.environ.get('DATABASE_URL')
 
 

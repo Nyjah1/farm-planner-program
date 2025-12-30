@@ -259,6 +259,35 @@ Sistēma automātiski izmanto PostgreSQL, ja `DATABASE_URL` vides mainīgais ir 
 - Ja nepieciešams, varat konfigurēt custom domain
 - Visi dati tiek glabāti PostgreSQL datubāzē
 
+## Deploy uz Streamlit Cloud
+
+Projektu var izvietot uz Streamlit Cloud.
+
+### Priekšnosacījumi
+
+1. GitHub repozitorijs ar projektu
+2. Streamlit Cloud konts (bez maksas plāns pieejams)
+3. PostgreSQL datubāze (Render, Supabase, vai cita)
+
+### Deploy soļi
+
+1. **Pieslēdziet GitHub repozitoriju Streamlit Cloud:**
+   - Ielogojieties Streamlit Cloud
+   - Noklikšķiniet "New app"
+   - Izvēlieties repozitoriju un branch
+
+2. **Konfigurējiet secrets:**
+   - Streamlit Cloud dashboard, noklikšķiniet uz jūsu aplikācijas
+   - Izvēlieties "Settings" → "Secrets"
+   - Pievienojiet:
+     ```toml
+     DB_URL = "postgresql://user:password@host:port/database"
+     ```
+
+3. **Deploy:**
+   - Streamlit Cloud automātiski izveidos aplikāciju
+   - Pēc veiksmīga deploy, jūs saņemsiet URL
+
 ### Piezīmes
 
 - Pirmā deploy var aizņemt vairākas minūtes, kamēr tiek būvēts Docker image
