@@ -42,22 +42,7 @@ if 'debug_shown' not in st.session_state:
     st.session_state.debug_shown = True
     print("Aplikācija sākas...")
 
-# Inicializē Storage (izmantojot session state, lai nav katru reizi jauns)
-if 'storage' not in st.session_state:
-    try:
-        st.session_state.storage = Storage()
-    except Exception as e:
-        st.error(f"Kļūda inicializējot sistēmu: {e}")
-        import traceback
-        print(f"Kļūda inicializējot sistēmu: {e}")
-        print(traceback.format_exc())
-        st.stop()
-
-# Definē storage tikai pēc inicializācijas
-if 'storage' in st.session_state:
-    storage = st.session_state.storage
-else:
-    storage = None
+# Storage inicializācija notiks main() funkcijā
 
 
 def _show_price_source_info():
@@ -2702,7 +2687,6 @@ def main():
     """Galvenā funkcija."""
     try:
         # Pārbauda, vai storage ir inicializēts
-        # Globālā inicializācija jau notiek faila augšā, bet ja tā neizdevās, mēģinām vēlreiz
         if 'storage' not in st.session_state:
             try:
                 st.session_state.storage = Storage()
@@ -2903,10 +2887,12 @@ def main():
 
 # Izsaucam main() funkciju vienmēr
 # Gan kad fails tiek palaists tieši, gan kad tiek importēts (piemēram, no app.py)
+# Šis kods izpildās, kad modulis tiek importēts
 try:
     main()
 except Exception as e:
     st.error(f"Kļūda izpildot aplikāciju: {e}")
+    st.exception(e)
     import traceback
     print(f"Kļūda izpildot aplikāciju: {e}")
     print(traceback.format_exc())
