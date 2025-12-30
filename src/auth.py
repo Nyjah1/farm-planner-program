@@ -10,11 +10,21 @@ from .storage import Storage
 from .models import UserModel
 
 
-def get_cookie_manager() -> CookieManager:
+def get_cookie_manager() -> Optional[CookieManager]:
     """Atgriež CookieManager instance."""
-    if "cookie_manager" not in st.session_state:
-        st.session_state.cookie_manager = CookieManager()
-    return st.session_state.cookie_manager
+    try:
+        if "cookie_manager" not in st.session_state:
+            cm = CookieManager()
+            # Pārbauda, vai CookieManager ir gatavs
+            if hasattr(cm, 'ready') and not cm.ready():
+                print("CookieManager nav gatavs")
+                return None
+            st.session_state.cookie_manager = cm
+        return st.session_state.cookie_manager
+    except Exception as e:
+        # Ja CookieManager nevar tikt inicializēts, atgriež None
+        print(f"CookieManager inicializācijas kļūda: {e}")
+        return None
 
 
 def login(storage: Storage, username: str, password: str, remember_me: bool = False) -> Optional[UserModel]:
@@ -41,7 +51,12 @@ def login(storage: Storage, username: str, password: str, remember_me: bool = Fa
             
             if storage.create_session(user.id, session_token, expires_at):
                 cookies = get_cookie_manager()
-                cookies.set("fp_session", session_token, expires_days=30)
+                if cookies is not None:
+                    try:
+                        cookies["fp_session"] = session_token
+                        cookies.save()
+                    except Exception as cookie_error:
+                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -71,7 +86,12 @@ def register(storage: Storage, username: str, password: str, remember_me: bool =
             
             if storage.create_session(user.id, session_token, expires_at):
                 cookies = get_cookie_manager()
-                cookies.set("fp_session", session_token, expires_days=30)
+                if cookies is not None:
+                    try:
+                        cookies["fp_session"] = session_token
+                        cookies.save()
+                    except Exception as cookie_error:
+                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -88,14 +108,21 @@ def check_session_cookie(storage: Storage) -> Optional[int]:
         user_id vai None, ja nav derīga session
     """
     cookies = get_cookie_manager()
-    session_token = cookies.get("fp_session")
-    
-    if not session_token:
+    if cookies is None:
         return None
     
-    session = storage.get_session_by_token(session_token)
-    if session:
-        return session["user_id"]
+    try:
+        session_token = cookies.get("fp_session")
+        
+        if not session_token:
+            return None
+        
+        session = storage.get_session_by_token(session_token)
+        if session:
+            return session["user_id"]
+    except Exception as e:
+        print(f"Cookie pārbaudes kļūda: {e}")
+        return None
     
     return None
 
@@ -103,11 +130,17 @@ def check_session_cookie(storage: Storage) -> Optional[int]:
 def logout(storage: Storage):
     """Izlogo lietotāju un izdzēš session."""
     cookies = get_cookie_manager()
-    session_token = cookies.get("fp_session")
-    
-    if session_token:
-        storage.delete_session_by_token(session_token)
-        cookies.delete("fp_session")
+    if cookies is not None:
+        try:
+            session_token = cookies.get("fp_session")
+            
+            if session_token:
+                storage.delete_session_by_token(session_token)
+                if "fp_session" in cookies:
+                    del cookies["fp_session"]
+                    cookies.save()
+        except Exception as e:
+            print(f"Logout cookie kļūda: {e}")
     
     if "user" in st.session_state:
         del st.session_state["user"]

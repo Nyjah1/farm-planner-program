@@ -758,6 +758,11 @@ def show_dashboard_section():
         # Filtrē tikai gadi, kas ir datu struktūrā
         df = df[df["year"].isin(all_years_ordered)].copy()
         
+        # Pārbauda, vai pēc filtrēšanas ir dati
+        if df.empty:
+            st.info("Nav datu izvēlētajiem gadiem.")
+            return
+        
         # 2 grafiki blakus
         import plotly.graph_objects as go
         
@@ -771,6 +776,11 @@ def show_dashboard_section():
             # Visi lauki
             field_names = sorted(df["field_name"].unique())
             is_all_fields = selected == "Visi lauki"
+            
+            # Pārbauda, vai ir lauki
+            if len(field_names) == 0:
+                st.info("Nav lauku datu.")
+                return
             
             # Krāsu palete
             import plotly.colors as pc
@@ -3119,14 +3129,23 @@ def main():
         # Pārbauda, vai lietotājs ir ielogojies
         if "user" not in st.session_state:
             # Mēģina atjaunot session no cookie
-            user_id = check_session_cookie(storage)
-            if user_id:
-                st.session_state["user"] = user_id
-            else:
+            try:
+                user_id = check_session_cookie(storage)
+                if user_id:
+                    st.session_state["user"] = user_id
+                else:
+                    show_login()
+                    return
+            except Exception as cookie_error:
+                # Ja cookie pārbaude neizdodas, vienkārši rāda login
+                print(f"Cookie pārbaudes kļūda: {cookie_error}")
+                import traceback
+                print(traceback.format_exc())
                 show_login()
                 return
     except Exception as e:
         st.error(f"Kļūda: {e}")
+        st.exception(e)
         import traceback
         print(f"Kļūda: {e}")
         print(traceback.format_exc())
