@@ -2901,41 +2901,13 @@ def main():
     st.caption("Farm Planner • 2025")
 
 
-# Streamlit izpilda kodu, kas nav funkcijās, tāpēc izsaucam main() tikai, ja fails tiek palaists tieši
-# Ja fails tiek importēts (piemēram, no app.py), main() tiks izsaukta no turienes
-# Bet arī izsaucam main(), ja fails tiek importēts, lai nodrošinātu, ka aplikācija darbojas
-# gan lokāli, gan Streamlit Cloud
-if __name__ == "__main__":
-    # Pārbaudām, vai storage ir inicializēts
-    if 'storage' not in st.session_state:
-        st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu (F5).")
-        st.info("Mēģinot inicializēt sistēmu...")
-        try:
-            st.session_state.storage = Storage()
-            print("Sistēma inicializēta veiksmīgi")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Kļūda inicializējot sistēmu: {e}")
-            import traceback
-            print(f"Kļūda inicializējot sistēmu: {e}")
-            print(traceback.format_exc())
-        st.stop()
-
-    # Izsaucam main() funkciju
-    try:
-        main()
-    except Exception as e:
-        st.error(f"Kļūda izpildot aplikāciju: {e}")
-        import traceback
-        print(f"Kļūda izpildot aplikāciju: {e}")
-        print(traceback.format_exc())
-else:
-    # Ja fails tiek importēts (piemēram, no app.py), izsaucam main() arī šeit
-    # Bet tikai tad, ja storage ir inicializēts
-    if 'storage' in st.session_state:
-        try:
-            main()
-        except Exception as e:
-            # Kļūdas jau tiks apstrādātas app.py
-            pass
+# Izsaucam main() funkciju vienmēr
+# Gan kad fails tiek palaists tieši, gan kad tiek importēts (piemēram, no app.py)
+try:
+    main()
+except Exception as e:
+    st.error(f"Kļūda izpildot aplikāciju: {e}")
+    import traceback
+    print(f"Kļūda izpildot aplikāciju: {e}")
+    print(traceback.format_exc())
 
