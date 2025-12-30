@@ -3271,30 +3271,32 @@ def main():
     st.caption("Farm Planner • 2025")
 
 
-# Streamlit izpilda kodu, kas nav funkcijās, tāpēc izsaucam main() tieši
-# Pārbaudām, vai storage ir inicializēts
-if 'storage' not in st.session_state:
-    st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu (F5).")
-    st.info("Mēģinot inicializēt sistēmu...")
-    try:
-        st.session_state.storage = Storage()
-        ensure_auth_tables(st.session_state.storage)
-        ensure_admin_user(st.session_state.storage)
-        print("Sistēma inicializēta veiksmīgi")
-        st.rerun()
-    except Exception as e:
-        st.error(f"Kļūda inicializējot sistēmu: {e}")
-        import traceback
-        print(f"Kļūda inicializējot sistēmu: {e}")
-        print(traceback.format_exc())
-    st.stop()
+# Streamlit izpilda kodu, kas nav funkcijās, tāpēc izsaucam main() tikai, ja fails tiek palaists tieši
+# Ja fails tiek importēts (piemēram, no app.py), main() tiks izsaukta no turienes
+if __name__ == "__main__":
+    # Pārbaudām, vai storage ir inicializēts
+    if 'storage' not in st.session_state:
+        st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu (F5).")
+        st.info("Mēģinot inicializēt sistēmu...")
+        try:
+            st.session_state.storage = Storage()
+            ensure_auth_tables(st.session_state.storage)
+            ensure_admin_user(st.session_state.storage)
+            print("Sistēma inicializēta veiksmīgi")
+            st.rerun()
+        except Exception as e:
+            st.error(f"Kļūda inicializējot sistēmu: {e}")
+            import traceback
+            print(f"Kļūda inicializējot sistēmu: {e}")
+            print(traceback.format_exc())
+        st.stop()
 
-# Izsaucam main() funkciju
-try:
-    main()
-except Exception as e:
-    st.error(f"Kļūda izpildot aplikāciju: {e}")
-    import traceback
-    print(f"Kļūda izpildot aplikāciju: {e}")
-    print(traceback.format_exc())
+    # Izsaucam main() funkciju
+    try:
+        main()
+    except Exception as e:
+        st.error(f"Kļūda izpildot aplikāciju: {e}")
+        import traceback
+        print(f"Kļūda izpildot aplikāciju: {e}")
+        print(traceback.format_exc())
 
