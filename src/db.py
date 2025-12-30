@@ -148,6 +148,8 @@ def get_db_cursor():
     Usage:
         with get_db_cursor() as cursor:
             cursor.execute("SELECT * FROM table")
+    
+    Automātiski veic rollback, ja notiek kļūda.
     """
     conn = get_connection()
     cursor = None
@@ -156,6 +158,7 @@ def get_db_cursor():
         yield cursor
         conn.commit()
     except Exception:
+        # Kritiski: jāveic rollback, lai novērstu "transaction is aborted" kļūdu
         conn.rollback()
         raise
     finally:

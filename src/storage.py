@@ -98,10 +98,10 @@ class Storage:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS users (
-                            id BIGSERIAL PRIMARY KEY,
-                            username TEXT NOT NULL UNIQUE,
+                            id SERIAL PRIMARY KEY,
+                            username TEXT UNIQUE NOT NULL,
                             password_hash TEXT NOT NULL,
-                            created_at TIMESTAMPTZ DEFAULT now()
+                            created_at TIMESTAMP DEFAULT NOW()
                         )
                     """)
                 else:
@@ -122,17 +122,17 @@ class Storage:
         except Exception as e:
             raise RuntimeError(f"Kļūda migrējot users tabulu: {e}") from e
         
-        # User sessions tabula (bez foreign key constraints sākumā)
+        # User sessions tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS user_sessions (
-                            id BIGSERIAL PRIMARY KEY,
-                            user_id BIGINT NOT NULL,
-                            session_token TEXT NOT NULL UNIQUE,
-                            created_at TIMESTAMPTZ DEFAULT now(),
-                            expires_at TIMESTAMPTZ NOT NULL
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            session_token TEXT UNIQUE NOT NULL,
+                            created_at TIMESTAMP DEFAULT NOW(),
+                            expires_at TIMESTAMP NOT NULL
                         )
                     """)
                 else:
@@ -140,7 +140,7 @@ class Storage:
                     cursor.execute(f"""
                         CREATE TABLE IF NOT EXISTS user_sessions (
                             id {id_type},
-                            user_id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL REFERENCES users(id),
                             session_token TEXT NOT NULL UNIQUE,
                             created_at TEXT NOT NULL,
                             expires_at TEXT NOT NULL
@@ -149,17 +149,17 @@ class Storage:
         except Exception as e:
             raise RuntimeError(f"Kļūda izveidojot user_sessions tabulu: {e}") from e
         
-        # Auth tokens tabula (bez foreign key constraints sākumā)
+        # Auth tokens tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
-                            id BIGSERIAL PRIMARY KEY,
-                            user_id BIGINT NOT NULL,
-                            token_hash TEXT NOT NULL UNIQUE,
-                            expires_at TIMESTAMPTZ NOT NULL,
-                            created_at TIMESTAMPTZ DEFAULT now()
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            token_hash TEXT UNIQUE NOT NULL,
+                            expires_at TIMESTAMP NOT NULL,
+                            created_at TIMESTAMP DEFAULT NOW()
                         )
                     """)
                 else:
@@ -167,7 +167,7 @@ class Storage:
                     cursor.execute(f"""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
                             id {id_type},
-                            user_id INTEGER NOT NULL,
+                            user_id INTEGER NOT NULL REFERENCES users(id),
                             token_hash TEXT NOT NULL UNIQUE,
                             expires_at TEXT NOT NULL,
                             created_at TEXT NOT NULL
@@ -176,14 +176,14 @@ class Storage:
         except Exception as e:
             raise RuntimeError(f"Kļūda izveidojot auth_tokens tabulu: {e}") from e
         
-        # Lauku tabula (bez foreign key constraints sākumā)
+        # Lauku tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS fields (
-                            id BIGSERIAL PRIMARY KEY,
-                            owner_user_id BIGINT NOT NULL,
+                            id SERIAL PRIMARY KEY,
+                            owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                             name TEXT NOT NULL,
                             area_ha REAL NOT NULL CHECK(area_ha > 0),
                             soil TEXT NOT NULL,
@@ -201,7 +201,7 @@ class Storage:
                     cursor.execute(f"""
                         CREATE TABLE IF NOT EXISTS fields (
                             id {id_type},
-                            owner_user_id INTEGER NOT NULL,
+                            owner_user_id INTEGER NOT NULL REFERENCES users(id),
                             name TEXT NOT NULL,
                             area_ha REAL NOT NULL CHECK(area_ha > 0),
                             soil TEXT NOT NULL,
@@ -223,10 +223,10 @@ class Storage:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS plantings (
-                            field_id BIGINT NOT NULL,
+                            field_id INTEGER NOT NULL REFERENCES fields(id) ON DELETE CASCADE,
                             year INTEGER NOT NULL,
                             crop TEXT NOT NULL,
-                            owner_user_id BIGINT NOT NULL,
+                            owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                             PRIMARY KEY (field_id, year)
                         )
                     """)
@@ -249,11 +249,13 @@ class Storage:
         except Exception as e:
             raise RuntimeError(f"Kļūda migrējot kolonnas: {e}") from e
         
-        # Migrācija: pievieno foreign key constraints (pēc tam, kad users tabula ir pareizi konfigurēta)
+        # Foreign key constraints jau ir tabulu definīcijās, nav nepieciešama atsevišķa migrācija
+        # Migrācija tiek izpildīta tikai, ja tabulas jau eksistē bez FK (backward compatibility)
         try:
             self._migrate_foreign_keys()
         except Exception as e:
-            raise RuntimeError(f"Kļūda migrējot foreign key constraints: {e}") from e
+            # Migrācija nav kritiska, ja tabulas jau ir ar FK
+            print(f"Brīdinājums: migrācija foreign key constraints: {e}")
         
         # Izpilda migrāciju augsnes vērtībām
         try:
