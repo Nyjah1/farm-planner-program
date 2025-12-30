@@ -1501,7 +1501,8 @@ def plan_for_years(
             virtual_planting = PlantingRecord(
                 field_id=field.id,
                 year=target_year,
-                crop=result['best_crop']
+                crop=result['best_crop'],
+                owner_user_id=field.owner_user_id
             )
             virtual_history.append(virtual_planting)
         
@@ -1640,7 +1641,8 @@ def plan_for_years_lookahead(
         virtual_planting = PlantingRecord(
             field_id=field.id,
             year=start_year,
-            crop=candidate_crop
+            crop=candidate_crop,
+            owner_user_id=field.owner_user_id
         )
         virtual_history.append(virtual_planting)
         
@@ -1697,7 +1699,8 @@ def plan_for_years_lookahead(
                     virtual_planting = PlantingRecord(
                         field_id=field.id,
                         year=target_year,
-                        crop=result['best_crop']
+                        crop=result['best_crop'],
+                        owner_user_id=field.owner_user_id
                     )
                     virtual_history.append(virtual_planting)
         
@@ -1782,7 +1785,8 @@ def plan_for_years_lookahead(
     virtual_planting = PlantingRecord(
         field_id=field.id,
         year=start_year,
-        crop=best_crop
+        crop=best_crop,
+        owner_user_id=field.owner_user_id
     )
     virtual_history.append(virtual_planting)
     
@@ -1843,7 +1847,8 @@ def plan_for_years_lookahead(
                 virtual_planting = PlantingRecord(
                     field_id=field.id,
                     year=target_year,
-                    crop=result['best_crop']
+                    crop=result['best_crop'],
+                    owner_user_id=field.owner_user_id
                 )
                 virtual_history.append(virtual_planting)
             
