@@ -2997,14 +2997,14 @@ def show_login():
     with tab1:
         st.markdown("### Pieslēgties")
         with st.form("login_form"):
-            username = st.text_input("Lietotājvārds", key="login_username")
+            email = st.text_input("E-pasta adrese", key="login_email")
             password = st.text_input("Parole", type="password", key="login_password")
             remember_me = st.checkbox("Atcerēties mani šajā ierīcē", key="login_remember_me")
             submit = st.form_submit_button("Pieslēgties", use_container_width=True)
             
             if submit:
-                if username and password:
-                    user = authenticate(storage, username, password)
+                if email and password:
+                    user = authenticate(storage, email, password)
                     if user:
                         st.session_state["user"] = user
                         
@@ -3012,7 +3012,7 @@ def show_login():
                         if remember_me:
                             token = set_remember_token(storage, user["id"], remember=True)
                             if token:
-                                set_auth_cookie(user["id"], user["username"], token, expires_days=30)
+                                set_auth_cookie(user["id"], user["email"], token, expires_days=30)
                         else:
                             # Noņem token, ja bija
                             set_remember_token(storage, user["id"], remember=False)
@@ -3020,26 +3020,26 @@ def show_login():
                         
                         st.rerun()
                     else:
-                        st.error("Nepareizs lietotājvārds vai parole.")
+                        st.error("Nepareiza e-pasta adrese vai parole.")
                 else:
-                    st.error("Lūdzu, ievadiet lietotājvārdu un paroli.")
+                    st.error("Lūdzu, ievadiet e-pasta adresi un paroli.")
     
     with tab2:
         st.markdown("### Reģistrēties")
         with st.form("signup_form"):
-            username = st.text_input("Lietotājvārds", key="signup_username", help="3-32 simboli, tikai burti, cipari un . _ -")
+            email = st.text_input("E-pasta adrese", key="signup_email", help="Derīga e-pasta adrese")
             password = st.text_input("Parole", type="password", key="signup_password", help="Vismaz 8 simboli")
             password_repeat = st.text_input("Atkārtot paroli", type="password", key="signup_password_repeat")
             submit = st.form_submit_button("Izveidot kontu", use_container_width=True)
             
             if submit:
-                if not username or not password or not password_repeat:
+                if not email or not password or not password_repeat:
                     st.error("Lūdzu, aizpildiet visus laukus.")
                 elif password != password_repeat:
                     st.error("Paroles nesakrīt.")
                 else:
                     try:
-                        user = register_user(storage, username, password)
+                        user = register_user(storage, email, password)
                         if user:
                             st.session_state["user"] = user
                             st.success("Konts izveidots veiksmīgi!")
@@ -3148,10 +3148,10 @@ def main():
     # Sidebar
     with st.sidebar:
         # Lietotāja informācija augšā
-        username = st.session_state["user"]["username"]
-        st.markdown(f"**Sveiks, {username}**")
+        user_email = st.session_state["user"]["email"]
+        st.markdown(f"**Logged in as:** {user_email}")
         
-        if st.button("Izlogoties", use_container_width=True, key="logout_btn"):
+        if st.button("Logout", use_container_width=True, key="logout_btn"):
             # Izdzēš remember token no DB
             if "user" in st.session_state and 'storage' in st.session_state:
                 user_id = st.session_state["user"]["id"]

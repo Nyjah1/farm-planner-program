@@ -17,7 +17,7 @@ def _get_placeholder():
 
 def ensure_auth_tables(storage):
     """
-    Izveido users tabulu, ja tā nav, un pievieno remember_token kolonnas, ja tās nav.
+    Izveido users tabulu, ja tā nav, un veic migrācijas.
     
     Args:
         storage: Storage instance (tiek izmantots tikai, lai pārbaudītu, vai ir inicializēts)
@@ -25,27 +25,42 @@ def ensure_auth_tables(storage):
     id_type = _get_auto_increment()
     
     with get_db_cursor() as cursor:
-        # Izveido users tabulu
+        # Migrācija: ja ir username kolonna, pārveido uz email
+        try:
+            cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='users'")
+            result = cursor.fetchone()
+            if result and 'username' in result[0] and 'email' not in result[0]:
+                # Migrācija: pievieno email kolonnu
+                cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
+                # Kopē datus no username uz email
+                cursor.execute("UPDATE users SET email = username WHERE email IS NULL")
+                # Izdzēs username kolonnu (SQLite nevar tieši, bet mēs to ignorēsim)
+        except Exception:
+            pass
+        
+        # Izveido users tabulu ar email
         if is_postgres():
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS users (
                     id {id_type},
-                    username TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     remember_token TEXT,
-                    remember_token_expires TIMESTAMP
+                    remember_token_expires TIMESTAMP,
+                    farming_type TEXT DEFAULT 'konvencionāla'
                 )
             """)
         else:
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS users (
                     id {id_type},
-                    username TEXT NOT NULL UNIQUE,
+                    email TEXT NOT NULL UNIQUE,
                     password_hash TEXT NOT NULL,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     remember_token TEXT,
-                    remember_token_expires TEXT
+                    remember_token_expires TEXT,
+                    farming_type TEXT DEFAULT 'konvencionāla'
                 )
             """)
         
@@ -53,7 +68,7 @@ def ensure_auth_tables(storage):
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN remember_token TEXT")
         except Exception:
-            pass  # Kolonna jau eksistē
+            pass
         
         try:
             if is_postgres():
@@ -61,13 +76,24 @@ def ensure_auth_tables(storage):
             else:
                 cursor.execute("ALTER TABLE users ADD COLUMN remember_token_expires TEXT")
         except Exception:
-            pass  # Kolonna jau eksistē
+            pass
         
-        # Migrācija: pievieno farming_type kolonnu (konvencionāla/bioloģiska)
+        # Migrācija: pievieno farming_type kolonnu
         try:
             cursor.execute("ALTER TABLE users ADD COLUMN farming_type TEXT DEFAULT 'konvencionāla'")
         except Exception:
-            pass  # Kolonna jau eksistē
+            pass
+        
+        # Migrācija: pievieno email kolonnu, ja nav
+        try:
+            cursor.execute("ALTER TABLE users ADD COLUMN email TEXT")
+            # Ja ir username, kopē uz email
+            try:
+                cursor.execute("UPDATE users SET email = username WHERE email IS NULL")
+            except Exception:
+                pass
+        except Exception:
+            pass
 
 
 def hash_password(password: str) -> str:
@@ -97,23 +123,23 @@ def verify_password(password: str, password_hash: str) -> bool:
     return bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8'))
 
 
-def create_user(storage, username: str, password: str) -> Optional[Dict]:
+def create_user(storage, email: str, password: str) -> Optional[Dict]:
     """
     Izveido jaunu lietotāju.
     
     Args:
         storage: Storage instance
-        username: Lietotājvārds
+        email: E-pasta adrese
         password: Parole
         
     Returns:
-        User dict ar id un username vai None, ja neizdevās
+        User dict ar id un email vai None, ja neizdevās
     """
     placeholder = _get_placeholder()
     
     # Pārbauda, vai lietotājs jau eksistē
     with get_db_cursor() as cursor:
-        cursor.execute(f"SELECT id FROM users WHERE username = {placeholder}", (username,))
+        cursor.execute(f"SELECT id FROM users WHERE email = {placeholder}", (email,))
         if cursor.fetchone():
             return None  # Lietotājs jau eksistē
     
@@ -126,19 +152,19 @@ def create_user(storage, username: str, password: str) -> Optional[Dict]:
         cursor = conn.cursor()
         if is_postgres():
             cursor.execute(
-                f"INSERT INTO users (username, password_hash) VALUES ({placeholder}, {placeholder}) RETURNING id",
-                (username, password_hash)
+                f"INSERT INTO users (email, password_hash) VALUES ({placeholder}, {placeholder}) RETURNING id",
+                (email, password_hash)
             )
             user_id = cursor.fetchone()[0]
         else:
             cursor.execute(
-                f"INSERT INTO users (username, password_hash) VALUES ({placeholder}, {placeholder})",
-                (username, password_hash)
+                f"INSERT INTO users (email, password_hash) VALUES ({placeholder}, {placeholder})",
+                (email, password_hash)
             )
             user_id = cursor.lastrowid
         conn.commit()
         cursor.close()
-        return {"id": user_id, "username": username}
+        return {"id": user_id, "email": email}
     except Exception:
         conn.rollback()
         raise
@@ -146,35 +172,35 @@ def create_user(storage, username: str, password: str) -> Optional[Dict]:
         conn.close()
 
 
-def authenticate(storage, username: str, password: str) -> Optional[Dict]:
+def authenticate(storage, email: str, password: str) -> Optional[Dict]:
     """
     Autentificē lietotāju.
     
     Args:
         storage: Storage instance
-        username: Lietotājvārds
+        email: E-pasta adrese
         password: Parole
         
     Returns:
-        User dict ar id un username vai None, ja autentifikācija neizdevās
+        User dict ar id un email vai None, ja autentifikācija neizdevās
     """
     placeholder = _get_placeholder()
     
     with get_db_cursor() as cursor:
         cursor.execute(
-            f"SELECT id, username, password_hash FROM users WHERE username = {placeholder}",
-            (username,)
+            f"SELECT id, email, password_hash FROM users WHERE email = {placeholder}",
+            (email,)
         )
         row = cursor.fetchone()
         
         if not row:
             return None
         
-        user_id, db_username, password_hash = row
+        user_id, db_email, password_hash = row
         
         # Pārbauda paroli
         if verify_password(password, password_hash):
-            return {"id": user_id, "username": db_username}
+            return {"id": user_id, "email": db_email}
         else:
             return None
 
@@ -198,40 +224,37 @@ def ensure_admin_user(storage) -> bool:
             return True  # Jau ir lietotāji
     
     # Nav neviena lietotāja - izveido admin no env
-    admin_username = os.getenv("FARM_ADMIN_USER")
+    admin_email = os.getenv("FARM_ADMIN_EMAIL")
     admin_password = os.getenv("FARM_ADMIN_PASS")
     
-    if not admin_username or not admin_password:
+    if not admin_email or not admin_password:
         return False  # Env nav uzstādīts
     
     # Izveido admin lietotāju
-    user = create_user(storage, admin_username, admin_password)
+    user = create_user(storage, admin_email, admin_password)
     return user is not None
 
 
-def register_user(storage, username: str, password: str) -> Dict:
+def register_user(storage, email: str, password: str) -> Dict:
     """
     Reģistrē jaunu lietotāju.
     
     Args:
         storage: Storage instance
-        username: Lietotājvārds (3-32 simboli, tikai [a-zA-Z0-9._-])
+        email: E-pasta adrese
         password: Parole (vismaz 8 simboli)
         
     Returns:
-        User dict ar id un username
+        User dict ar id un email
         
     Raises:
-        ValueError: Ja validācija neizdodas vai username jau eksistē
+        ValueError: Ja validācija neizdodas vai email jau eksistē
     """
-    # Validācija: username
-    if not username or len(username) < 3 or len(username) > 32:
-        raise ValueError("Lietotājvārdam jābūt no 3 līdz 32 simboliem.")
-    
-    # Validācija: username tikai atļautie simboli
+    # Validācija: email
     import re
-    if not re.match(r'^[a-zA-Z0-9._-]+$', username):
-        raise ValueError("Lietotājvārdā var izmantot tikai burtus, ciparus un simbolus: . _ -")
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not email or not re.match(email_pattern, email):
+        raise ValueError("Lūdzu, ievadiet derīgu e-pasta adresi.")
     
     # Validācija: password
     if not password or len(password) < 8:
@@ -241,9 +264,9 @@ def register_user(storage, username: str, password: str) -> Dict:
     
     # Pārbauda, vai lietotājs jau eksistē
     with get_db_cursor() as cursor:
-        cursor.execute(f"SELECT id FROM users WHERE username = {placeholder}", (username,))
+        cursor.execute(f"SELECT id FROM users WHERE email = {placeholder}", (email,))
         if cursor.fetchone():
-            raise ValueError("Lietotājs ar šādu lietotājvārdu jau eksistē.")
+            raise ValueError("Lietotājs ar šādu e-pasta adresi jau eksistē.")
     
     # Hash paroli
     password_hash = hash_password(password)
@@ -256,19 +279,19 @@ def register_user(storage, username: str, password: str) -> Dict:
         cursor = conn.cursor()
         if is_postgres():
             cursor.execute(
-                f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}) RETURNING id",
-                (username, password_hash, created_at)
+                f"INSERT INTO users (email, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}) RETURNING id",
+                (email, password_hash, created_at)
             )
             user_id = cursor.fetchone()[0]
         else:
             cursor.execute(
-                f"INSERT INTO users (username, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder})",
-                (username, password_hash, created_at)
+                f"INSERT INTO users (email, password_hash, created_at) VALUES ({placeholder}, {placeholder}, {placeholder})",
+                (email, password_hash, created_at)
             )
             user_id = cursor.lastrowid
         conn.commit()
         cursor.close()
-        return {"id": user_id, "username": username}
+        return {"id": user_id, "email": email}
     except Exception:
         conn.rollback()
         raise
@@ -354,7 +377,7 @@ def validate_remember_token(storage, token: str) -> Optional[Dict]:
     try:
         cursor = conn.cursor()
         cursor.execute(
-            f"SELECT id, username, remember_token_expires FROM users WHERE remember_token = {placeholder}",
+            f"SELECT id, email, remember_token_expires FROM users WHERE remember_token = {placeholder}",
             (token,)
         )
         row = cursor.fetchone()
@@ -364,7 +387,7 @@ def validate_remember_token(storage, token: str) -> Optional[Dict]:
             conn.close()
             return None
         
-        user_id, username, expires_str = row
+        user_id, email, expires_str = row
         
         # Pārbauda, vai token nav beidzies
         if expires_str:
@@ -397,7 +420,7 @@ def validate_remember_token(storage, token: str) -> Optional[Dict]:
         
         cursor.close()
         conn.close()
-        return {"id": user_id, "username": username}
+        return {"id": user_id, "email": email}
     except Exception:
         conn.rollback()
         conn.close()

@@ -90,20 +90,20 @@ def delete_cookie(name: str):
 
 def get_auth_cookie() -> Optional[Dict[str, str]]:
     """
-    Iegūst autentifikācijas cookie (user_id, username, auth_token).
+    Iegūst autentifikācijas cookie (user_id, email, auth_token).
     
     Returns:
-        Dict ar user_id, username, auth_token vai None
+        Dict ar user_id, email, auth_token vai None
     """
     user_id = get_cookie("user_id")
-    username = get_cookie("username")
+    email = get_cookie("email")
     auth_token = get_cookie("auth_token")
     
-    if user_id and username and auth_token:
+    if user_id and email and auth_token:
         try:
             return {
                 "user_id": str(user_id),
-                "username": str(username),
+                "email": str(email),
                 "auth_token": str(auth_token)
             }
         except (ValueError, TypeError):
@@ -112,18 +112,18 @@ def get_auth_cookie() -> Optional[Dict[str, str]]:
     return None
 
 
-def set_auth_cookie(user_id: int, username: str, auth_token: str, expires_days: int = 30):
+def set_auth_cookie(user_id: int, email: str, auth_token: str, expires_days: int = 30):
     """
     Iestata autentifikācijas cookie.
     
     Args:
         user_id: Lietotāja ID
-        username: Lietotājvārds
+        email: E-pasta adrese
         auth_token: Auth token
         expires_days: Derīguma termiņš dienās
     """
     set_cookie("user_id", str(user_id), expires_days)
-    set_cookie("username", username, expires_days)
+    set_cookie("email", email, expires_days)
     set_cookie("auth_token", auth_token, expires_days)
 
 
@@ -132,6 +132,6 @@ def clear_auth_cookie():
     Dzēš autentifikācijas cookie.
     """
     delete_cookie("user_id")
-    delete_cookie("username")
+    delete_cookie("email")
     delete_cookie("auth_token")
 

@@ -26,6 +26,33 @@ streamlit run ui_app.py
 
 Aplikācija būs pieejama: http://localhost:8501
 
+## Lietotāji un autentifikācija
+
+Sistēma izmanto lokālu autentifikāciju ar e-pasta adresi un paroli.
+
+### Reģistrācija un pieslēgšanās
+
+- Katram lietotājam ir savs konts ar unikālu e-pasta adresi
+- Paroles tiek glabātas kā bcrypt hash (nekad nav glabātas kā teksts)
+- Katrs lietotājs redz tikai savus datus (lauki, sējumu vēsture)
+
+### Remember me
+
+- Ja lietotājs atzīmē "Atcerēties mani šajā ierīcē", viņš automātiski paliek ielogots 30 dienas
+- Ielogošanās beidzas tikai, kad lietotājs nospiež "Logout" vai izdzēš pārlūka datus
+
+### Datu izolācija
+
+- Visi lauki un sējumu ieraksti ir saistīti ar lietotāja ID
+- Lietotāji nevar redzēt citu lietotāju datus
+- Katram lietotājam ir savs neatkarīgs darbs ar sistēmu
+
+### Streamlit Cloud datubāze
+
+- Streamlit Cloud demo vidē SQLite datubāze var tikt resetota, kad aplikācija tiek restartēta
+- Visi dati tiek glabāti lokālajā SQLite datubāzē (`data/farm.db`)
+- Produkcijas vidē ieteicams izmantot PostgreSQL ar `DATABASE_URL` vides mainīgo
+
 ## Deploy (Streamlit Cloud)
 
 Projektu var izvietot uz Streamlit Cloud.

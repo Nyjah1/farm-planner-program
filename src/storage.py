@@ -121,7 +121,7 @@ class Storage:
         with get_db_cursor() as cursor:
             # Pārbauda un pievieno kolonnas fields tabulai
             new_columns = [
-                ("user_id", "INTEGER DEFAULT 1"),
+                ("user_id", "INTEGER"),
                 ("block_code", "TEXT"),
                 ("lad_area_ha", "REAL"),
                 ("lad_last_edited", "TEXT"),
@@ -137,27 +137,51 @@ class Storage:
                         cursor.execute(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}")
                     else:
                         cursor.execute(f"ALTER TABLE fields ADD COLUMN {col_name} {col_type}")
-                    
-                    # Aizpilda user_id, ja tā nav
-                    if col_name == "user_id":
-                        if is_postgres():
-                            cursor.execute("UPDATE fields SET user_id = 1 WHERE user_id IS NULL")
-                        else:
-                            cursor.execute("UPDATE fields SET user_id = 1 WHERE user_id IS NULL")
                 except Exception:
                     # Kolonna jau eksistē
                     pass
             
+            # Migrācija: piešķir user_id esošajiem ierakstiem
+            # Iegūst pirmā lietotāja ID vai izveido admin user
+            cursor.execute("SELECT id FROM users ORDER BY id LIMIT 1")
+            first_user_row = cursor.fetchone()
+            
+            if first_user_row:
+                first_user_id = first_user_row[0]
+            else:
+                # Nav neviena lietotāja - izveido admin user
+                from .auth import create_user
+                import os
+                admin_email = os.getenv("FARM_ADMIN_EMAIL", "admin@example.com")
+                admin_password = os.getenv("FARM_ADMIN_PASS", "admin123")
+                admin_user = create_user(self, admin_email, admin_password)
+                if admin_user:
+                    first_user_id = admin_user["id"]
+                else:
+                    first_user_id = 1  # Fallback
+            
+            # Aizpilda user_id esošajiem fields ierakstiem
+            placeholder = _get_placeholder()
+            cursor.execute(
+                f"UPDATE fields SET user_id = {placeholder} WHERE user_id IS NULL",
+                (first_user_id,)
+            )
+            
             # Pievieno user_id plantings tabulai, ja nav
             try:
                 if is_postgres():
-                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER DEFAULT 1")
+                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER")
                 else:
-                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER DEFAULT 1")
-                cursor.execute("UPDATE plantings SET user_id = 1 WHERE user_id IS NULL")
+                    cursor.execute("ALTER TABLE plantings ADD COLUMN user_id INTEGER")
             except Exception:
                 # Kolonna jau eksistē
                 pass
+            
+            # Aizpilda user_id esošajiem plantings ierakstiem
+            cursor.execute(
+                f"UPDATE plantings SET user_id = {placeholder} WHERE user_id IS NULL",
+                (first_user_id,)
+            )
     
     def migrate_soil_values(self):
         """Migrē vecās augsnes vērtības uz jaunajām (label -> code, vecie kodi -> jaunie kodi)."""
