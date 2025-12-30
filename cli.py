@@ -10,8 +10,8 @@ import sys
 # Prevent execution in Streamlit environment
 if 'streamlit' in sys.modules:
     raise RuntimeError(
-        "cli_app.py cannot be imported in Streamlit environment. "
-        "Use app.py or ui_app.py for Streamlit."
+        "cli.py cannot be imported in Streamlit environment. "
+        "Use app.py for Streamlit."
     )
 
 from datetime import datetime

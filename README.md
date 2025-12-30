@@ -21,7 +21,7 @@ pip install -r requirements.txt
 
 3. Palaidiet aplikāciju:
 ```bash
-streamlit run ui_app.py
+streamlit run app.py
 ```
 
 Aplikācija būs pieejama: http://localhost:8501
@@ -70,7 +70,7 @@ Projektu var izvietot uz Streamlit Cloud.
    - Izvēlieties GitHub repozitoriju ar šo projektu
 
 2. **Konfigurācija:**
-   - **Main file:** `ui_app.py`
+   - **Main file:** `app.py`
    - **Branch:** `main` vai `master` (atkarībā no jūsu repo)
 
 3. **Nepieciešamie faili:**
@@ -109,7 +109,7 @@ pip install -r requirements.txt
 ### Galvenā aplikācija
 
 ```bash
-streamlit run ui_app.py
+streamlit run app.py
 ```
 
 ### Testa skripti
@@ -144,7 +144,7 @@ Kopā atrastas cenas: 3/3
 
 ## Struktūra
 
-- `ui_app.py` - Streamlit UI aplikācija
+- `app.py` - Streamlit UI aplikācija
 - `src/` - Galvenais kods
   - `models.py` - Datu modeļi
   - `planner.py` - Plānošanas loģika

@@ -16,5 +16,5 @@ RUN mkdir -p data
 EXPOSE 10000
 
 # Palaiž Streamlit aplikāciju
-CMD streamlit run ui_app.py --server.address=0.0.0.0 --server.port=${PORT:-10000} --server.headless=true
+CMD streamlit run app.py --server.address=0.0.0.0 --server.port=${PORT:-10000} --server.headless=true
 
