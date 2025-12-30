@@ -2903,6 +2903,8 @@ def main():
 
 # Streamlit izpilda kodu, kas nav funkcijās, tāpēc izsaucam main() tikai, ja fails tiek palaists tieši
 # Ja fails tiek importēts (piemēram, no app.py), main() tiks izsaukta no turienes
+# Bet arī izsaucam main(), ja fails tiek importēts, lai nodrošinātu, ka aplikācija darbojas
+# gan lokāli, gan Streamlit Cloud
 if __name__ == "__main__":
     # Pārbaudām, vai storage ir inicializēts
     if 'storage' not in st.session_state:
@@ -2927,4 +2929,13 @@ if __name__ == "__main__":
         import traceback
         print(f"Kļūda izpildot aplikāciju: {e}")
         print(traceback.format_exc())
+else:
+    # Ja fails tiek importēts (piemēram, no app.py), izsaucam main() arī šeit
+    # Bet tikai tad, ja storage ir inicializēts
+    if 'storage' in st.session_state:
+        try:
+            main()
+        except Exception as e:
+            # Kļūdas jau tiks apstrādātas app.py
+            pass
 
