@@ -19,6 +19,7 @@ build/
 
 # Streamlit
 .streamlit/
+!.streamlit/config.toml
 
 # Environment variables
 .env

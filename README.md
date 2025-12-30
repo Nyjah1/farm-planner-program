@@ -26,6 +26,42 @@ streamlit run ui_app.py
 
 Aplikācija būs pieejama: http://localhost:8501
 
+## Deploy (Streamlit Cloud)
+
+Projektu var izvietot uz Streamlit Cloud.
+
+### Priekšnosacījumi
+
+1. GitHub repozitorijs ar projektu
+2. Streamlit Cloud konts (bez maksas plāns pieejams)
+
+### Deploy soļi
+
+1. **Pieslēdziet GitHub repozitoriju Streamlit Cloud:**
+   - Ielogojieties [Streamlit Cloud](https://streamlit.io/cloud)
+   - Noklikšķiniet "New app"
+   - Izvēlieties GitHub repozitoriju ar šo projektu
+
+2. **Konfigurācija:**
+   - **Main file:** `ui_app.py`
+   - **Branch:** `main` vai `master` (atkarībā no jūsu repo)
+
+3. **Nepieciešamie faili:**
+   - `requirements.txt` - jābūt repo saknē
+   - `data/*` - visi datu faili (crops.json, prices_lv.csv, u.c.)
+   - `.streamlit/config.toml` - Streamlit konfigurācija
+
+4. **Deploy:**
+   - Noklikšķiniet "Deploy"
+   - Streamlit Cloud automātiski instalēs atkarības un palaidīs aplikāciju
+   - Pēc veiksmīga deploy, jūs saņemsiet URL, kurā aplikācija būs pieejama
+
+### Piezīmes
+
+- Visi datu faili no `data/` direktorijas tiek iekļauti deploy
+- Sistēma izmanto SQLite datubāzi lokāli (`data/farm.db`)
+- Ja nepieciešams PostgreSQL, iestatiet `DATABASE_URL` vides mainīgo Streamlit Cloud iestatījumos
+
 ## Instalācija
 
 1. Izveidojiet virtuālo vidi:
