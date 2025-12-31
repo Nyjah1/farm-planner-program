@@ -889,11 +889,11 @@ def show_fields_section():
 
 
 def show_history_section():
-    """Sadaļa: Sējumu vēsture."""
-    st.title("Sējumu vēsture")
+    """Sadaļa: Lauka vēsture."""
+    st.title("Lauka vēsture")
     
     if 'storage' not in st.session_state:
-        st.error("Sistēma nav inicializēta")
+        st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu.")
         return
     
     storage = st.session_state.storage
@@ -909,7 +909,7 @@ def show_history_section():
     # Ielādē kultūru sarakstu
     try:
         crops_dict = load_catalog()
-        crop_names = list(crops_dict.keys())
+        crop_names = sorted(list(crops_dict.keys()))
     except Exception as e:
         st.error(f"Kļūda ielādējot kultūru katalogu: {e}")
         crop_names = []
@@ -926,63 +926,186 @@ def show_history_section():
         selected_field_id = field_options[selected_field_label]
         selected_field = next(f for f in fields if f.id == selected_field_id)
         
-        st.info(f"Lauks: {selected_field.name} ({selected_field.area_ha} ha, {selected_field.soil.label})")
-        
         # Forma pievienot ierakstu
-        with st.form("add_planting_form", clear_on_submit=True):
-            st.subheader("Pievienot sējumu vēsturi")
-            col1, col2 = st.columns(2)
+        with st.form("add_field_history_form", clear_on_submit=True):
+            st.subheader("Pievienot lauka vēstures ierakstu")
             
-            with col1:
-                year = st.number_input("Gads", min_value=2000, max_value=2100, value=datetime.now().year, key="planting_year")
-            with col2:
-                # Selectbox ar kultūru nosaukumiem + "Cits..." opcija
+            # Datums
+            op_date = st.date_input("Datums", value=datetime.now().date(), key="history_op_date")
+            
+            # 1) Vienots darbību saraksts (ieskaitot lauka apstrādes darbības)
+            actions = [
+                "Sēšana",
+                "Kūlšana",
+                # Lauka apstrāde (iekš kopējā saraksta)
+                "Aršana",
+                "Dziļirdināšana",
+                "Diskošana",
+                "Kultivēšana",
+                "Ecēšana",
+                "Veltņošana",
+                "Frēzēšana",
+                "Rugaines apstrāde",
+                "Sēklas gultnes sagatavošana",
+                "Šļūcotājs / Līmeņošana",
+                "Akmeņu ecēšana",
+                "Lauka rekultivācija",
+                # pārējās populārās
+                "Mēslošana",
+                "Miglošana",
+                "Kaļķošana",
+                "Sējuma kopšana",
+                "Augu aizsardzība (cits)",
+                "Stādīšana",
+                "Pļaušana",
+                "Mulčēšana",
+                "Ravēšana",
+                "Akmeņu lasīšana",
+                "Lauka planēšana",
+                "Drenāžas darbi",
+                "Malu/Grāvju pļaušana",
+                "Apūdeņošana",
+                "Augsnes analīzes",
+                "Sēklas apstrāde",
+                "Ražas transportēšana",
+                "Graudu žāvēšana",
+                "Graudu tīrīšana",
+                "Salmu presēšana",
+                "Salmu smalcināšana",
+                "Zaļmēslojuma iestrāde",
+                "Starpsējums / Segkultūra",
+                "Lauka apskate",
+                "Cits"
+            ]
+            selected_action = st.selectbox("Darbības tips", options=actions, key="history_action")
+            
+            # 2) Brīvais lauks, ja izvēlēts "Cits"
+            custom_action = None
+            if selected_action == "Cits":
+                custom_action = st.text_input(
+                    "Darbība (brīvi)",
+                    key="history_custom_action",
+                    placeholder="Piem.: Minerālmēslu izkliede, lauka mērīšana, u.c."
+                )
+            
+            # Notes (text_area) - vienmēr redzams
+            notes = st.text_area("Piezīmes", key="history_notes", height=100)
+            
+            # 3) Kultūra select - rādās tikai, ja "Sēšana" vai "Kūlšana"
+            crop = None
+            selected_crop = None
+            if selected_action == "Sēšana" or selected_action == "Kūlšana":
                 crop_options = crop_names + ["Cits..."] if crop_names else ["Cits..."]
-                selected_crop = st.selectbox("Kultūras nosaukums", options=crop_options, key="planting_crop_select")
+                selected_crop = st.selectbox("Kultūra", options=crop_options, key="history_crop_select")
                 
-                # Ja izvēlēts "Cits...", parāda text_input
                 if selected_crop == "Cits...":
-                    crop = st.text_input("Ievadiet kultūras nosaukumu", key="planting_crop_custom")
+                    crop = st.text_input("Ievadiet kultūras nosaukumu", key="history_crop_custom")
                 else:
                     crop = selected_crop
             
-            submitted = st.form_submit_button("Pievienot ierakstu")
+            # Papildus lauki (expander) - rādās tikai, ja tas ir jēdzīgi (Mēslošana, Miglošana, Kaļķošana)
+            amount = None
+            unit = None
+            cost_eur = None
+            if selected_action in ["Mēslošana", "Miglošana", "Kaļķošana"]:
+                with st.expander("Papildus informācija", expanded=False):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        amount = st.number_input("Daudzums", min_value=0.0, value=None, key="history_amount", step=0.01)
+                    with col2:
+                        unit = st.text_input("Mērvienība", key="history_unit", placeholder="ha, kg, l, utt.")
+                    
+                    cost_eur = st.number_input("Izmaksas (EUR)", min_value=0.0, value=None, key="history_cost_eur", step=0.01)
+            
+            submitted = st.form_submit_button("Saglabāt", use_container_width=True)
             
             if submitted:
                 try:
-                    if not crop or (selected_crop == "Cits..." and not crop.strip()):
-                        st.error("Kultūras nosaukums nevar būt tukšs!")
+                    # Validācija
+                    if selected_action == "Cits" and (not custom_action or not custom_action.strip()):
+                        st.error("Lūdzu ievadiet darbību.")
+                    elif (selected_action == "Sēšana" or selected_action == "Kūlšana") and (not crop or (selected_crop == "Cits..." and not crop.strip())):
+                        st.error(f"Kultūras nosaukums nevar būt tukšs, ja darbības tips ir '{selected_action}'!")
                     else:
+                        # Sagatavo action_value vērtību DB saglabāšanai
+                        if selected_action == "Cits":
+                            action_value = custom_action.strip()
+                        else:
+                            action_value = selected_action
+                        
+                        # Sagatavo notes
+                        final_notes = notes.strip() if notes else None
+                        
+                        # Padod action_value DB insert funkcijai
                         user_id = st.session_state["user"]
-                        planting = PlantingRecord(field_id=selected_field_id, year=year, crop=crop.strip(), owner_user_id=user_id)
-                        storage.add_planting(planting, user_id)
-                        st.success(f"Sējuma vēsture pievienota: {crop} ({year})")
-                        st.rerun()
+                        success = storage.add_field_history(
+                            owner_user_id=user_id,
+                            field_id=selected_field_id,
+                            op_date=op_date.isoformat(),
+                            action=action_value,
+                            notes=final_notes,
+                            crop=crop.strip() if crop else None,
+                            amount=amount if amount is not None else None,
+                            unit=unit.strip() if unit else None,
+                            cost_eur=cost_eur if cost_eur is not None else None
+                        )
+                        if success:
+                            st.success(f"Lauka vēstures ieraksts pievienots: {action_value} ({op_date})")
+                            st.rerun()
+                        else:
+                            st.error("Neizdevās pievienot ierakstu.")
                 except Exception as e:
                     st.error(f"Kļūda: {e}")
         
         st.divider()
         
         # Tabula ar vēsturi
-        st.subheader(f"Sējumu vēsture laukam '{selected_field.name}'")
+        st.subheader(f"Lauka vēsture: {selected_field.name}")
         user_id = st.session_state["user"]
-        all_plantings = storage.list_plantings(user_id)
-        field_history = [p for p in all_plantings if p.field_id == selected_field_id]
+        field_history = storage.list_field_history(user_id, selected_field_id)
         
         if not field_history:
-            st.info("Nav sējumu vēstures šim laukam.")
+            st.info("Nav lauka vēstures ierakstu šim laukam.")
         else:
-            # Sakārto pēc gada (jaunākais pirmā)
-            field_history.sort(key=lambda x: x.year, reverse=True)
-            
+            # Sagatavo datus tabulai
             history_data = []
-            for planting in field_history:
-                history_data.append({
-                    "Gads": planting.year,
-                    "Kultūra": planting.crop
-                })
+            for record in field_history:
+                row = {
+                    "Datums": record['op_date'],
+                    "Operācija": record['action'],
+                    "Piezīmes": record['notes'] or "",
+                    "Kultūra": record['crop'] or "",
+                }
+                # Pievieno papildu laukus, ja tie ir
+                if record['amount'] is not None:
+                    amount_str = f"{record['amount']:.2f}"
+                    if record['unit']:
+                        amount_str += f" {record['unit']}"
+                    row["Daudzums"] = amount_str
+                if record['cost_eur'] is not None:
+                    row["Izmaksas (EUR)"] = f"{record['cost_eur']:.2f}"
+                
+                history_data.append(row)
             
-            st.dataframe(history_data, use_container_width=True, hide_index=True)
+            # Parāda tabulu
+            df = pd.DataFrame(history_data)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            
+            # Dzēšanas pogas katram ierakstam
+            st.markdown("### Dzēst ierakstus")
+            for i, record in enumerate(field_history):
+                col1, col2, col3 = st.columns([3, 1, 1])
+                with col1:
+                    st.text(f"{record['op_date']} - {record['action']}" + (f" ({record['crop']})" if record['crop'] else ""))
+                with col2:
+                    if st.button("Dzēst", key=f"delete_history_{record['id']}", use_container_width=True):
+                        if storage.delete_field_history(user_id, record['id']):
+                            st.success("Ieraksts izdzēsts")
+                            st.rerun()
+                        else:
+                            st.error("Neizdevās dzēst ierakstu")
+                with col3:
+                    st.empty()  # Spacing
 
 
 def show_catalog_section():
@@ -2830,8 +2953,8 @@ def main():
             st.session_state.page = "Lauki"
             st.rerun()
 
-        if st.button("Sējumu vēsture", use_container_width=True):
-            st.session_state.page = "Sējumu vēsture"
+        if st.button("Lauka vēsture", use_container_width=True):
+            st.session_state.page = "Lauka vēsture"
             st.rerun()
 
         if st.button("Ieteikumi", use_container_width=True):
@@ -2867,7 +2990,7 @@ def main():
         show_dashboard_section()
     elif page == "Lauki":
         show_fields_section()
-    elif page == "Sējumu vēsture":
+    elif page == "Lauka vēsture":
         show_history_section()
     elif page == "Ieteikumi":
         show_recommendations_section()
