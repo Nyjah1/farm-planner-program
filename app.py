@@ -1,4 +1,5 @@
-import sys
+    # -*- coding: utf-8 -*-
+            import sys
 import io
 import os
 
@@ -2032,15 +2033,6 @@ def show_recommendations_section():
             on_change=compute_reco
         )
 
-    # Cenu avota informācija tiks parādīta pie rezultātiem
-    
-    # Parāda info tekstu par cenām un validāciju
-    st.info("Cenas tiek ņemtas no CSP (vidējās gada cenas). Ja cena ir ārpus saprātīga tirgus diapazona, kultūra netiek izmantota ieteikumos.")
-    
-    # Parāda info tekstu, ja dārzeņi ir izslēgti
-    if not include_vegetables:
-        st.info("Dārzeņi ir izslēgti no ieteikumiem. Lai tos iekļautu, atzīmē 'Iekļaut dārzeņus'.")
-    
     if selected_field_label:
         # Ja nav "Visi lauki", saglabā field_id
         if selected_field_label != "Visi lauki":
@@ -2118,7 +2110,6 @@ def show_recommendations_section():
                 # Parāda rezultātus (tā pati loģika kā iepriekš)
                 if reco_type == "plan_3y_lookahead":
                     st.success(f"3 gadu plāns laukam '{plan_result['field_name']}'")
-                    st.info("Plāns veidots ar look-ahead metodi")
                     
                     evaluated_candidates = plan_result.get('evaluated_candidates', [])
                     if evaluated_candidates:
@@ -2292,10 +2283,6 @@ def show_recommendations_section():
                 if base_result and base_result.get('diversification_applied'):
                     original_crop = base_result.get('original_crop')
                     current_crop = base_result.get('best_crop')
-                    st.info(
-                        f"Diversifikācija: izvēlēta **{current_crop}** "
-                        f"(oriģinālais ieteikums bija **{original_crop}**, bet tas jau ir izvēlēts citam laukam)."
-                    )
                 
                 if not base_result or base_result['best_crop'] is None:
                     # Nav atļautu kultūru - ERROR (sarkans)
@@ -2470,7 +2457,6 @@ def show_recommendations_section():
                         
                         # Favorite info (subtle, not warning)
                         if base_result.get('used_preference'):
-                            st.info("Izvēlēts no favorītajām kultūrām")
                             if base_result.get('preference_note'):
                                 st.caption(base_result['preference_note'])
                         elif base_result.get('preference_note'):
@@ -2638,12 +2624,7 @@ def show_recommendations_section():
                                         })
                                 if scenario_data:
                                     st.dataframe(scenario_data, use_container_width=True, hide_index=True)
-        else:
-            # Nav rezultāta - parāda ziņojumu
-            if st.session_state.get("reco_field_id"):
-                st.info("Izvēlieties lauku un citus parametrus, lai saņemtu ieteikumus.")
-            else:
-                st.info("Izvēlieties lauku, lai saņemtu ieteikumus.")
+        # Nav rezultāta - nav nepieciešams parādīt ziņojumu
 
 
 def show_login():
