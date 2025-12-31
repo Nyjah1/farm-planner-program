@@ -50,8 +50,17 @@ htmlcov/
 # But keep structure:
 !data/.gitkeep
 
+# User data files (should not be tracked)
+data/auth_cookies.json
+data/favorites*.json
+data/farm.db
+data/*.db
+
 # Temporary files
 *.tmp
 *.bak
 IGNORE*
 
+*.db
+data/auth_cookies.json
+data/favorites.json
