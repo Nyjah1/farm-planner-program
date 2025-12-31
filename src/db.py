@@ -66,17 +66,20 @@ def _is_valid_database_url(url: str) -> bool:
     if not url:
         return False
     
+    # Validācija: jāsākas ar postgresql:// vai postgres://
+    if not (url.startswith('postgresql://') or url.startswith('postgres://')):
+        return False
+    
     # Pārbauda, vai nav acīmredzami nepareizs (piemēram, satur "npx" vai citas komandas)
-    # Ja satur "npx", "npm", "neonctl" vai citas komandas, tas ir nepareizs
+    # Ja satur "npx", "npm", "neonctl" vai citas komandas, bet nav derīgs URL formāts, tas ir nepareizs
     invalid_keywords = ['npx', 'npm', 'neonctl', 'init', 'run ', 'exec']
     url_lower = url.lower()
     for keyword in invalid_keywords:
         if keyword in url_lower:
-            return False
-    
-    # Validācija: jāsākas ar postgresql:// vai postgres://
-    if not (url.startswith('postgresql://') or url.startswith('postgres://')):
-        return False
+            # Pārbauda, vai tas nav daļa no derīga URL (piemēram, hostname)
+            # Ja satur "=" vai nav tipiska URL struktūra, tas ir nepareizs
+            if '=' in url or '@' not in url:
+                return False
     
     return True
 

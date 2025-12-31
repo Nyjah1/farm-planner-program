@@ -1,5 +1,5 @@
 from enum import Enum
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator
@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class UserModel(BaseModel):
     """Lietotāja modelis."""
-    id: int
+    id: Union[int, str]  # int for SQLite, str (UUID) for PostgreSQL
     username: str
     password_hash: str
     created_at: str  # ISO format datetime string
@@ -33,11 +33,11 @@ class SoilType(Enum):
 
 class FieldModel(BaseModel):
     """Lauka modelis."""
-    id: int
+    id: Union[int, str]  # int for SQLite, str (UUID) for PostgreSQL
     name: str
     area_ha: float = Field(gt=0, description="Lauka platība hektāros")
     soil: SoilType
-    owner_user_id: int
+    owner_user_id: Union[int, str]  # int for SQLite, str (UUID) for PostgreSQL
     block_code: Optional[str] = None
     lad_area_ha: Optional[float] = None
     lad_last_edited: Optional[str] = None  # YYYY-MM-DD
@@ -49,10 +49,10 @@ class FieldModel(BaseModel):
 
 class PlantingRecord(BaseModel):
     """Stādīšanas ieraksts."""
-    field_id: int
+    field_id: Union[int, str]  # int for SQLite, str (UUID) for PostgreSQL
     year: int
     crop: str  # Kultūras nosaukums
-    owner_user_id: int
+    owner_user_id: Union[int, str]  # int for SQLite, str (UUID) for PostgreSQL
 
 
 class CropModel(BaseModel):
