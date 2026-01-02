@@ -2884,12 +2884,11 @@ def show_login():
         with st.form("login_form"):
             username = st.text_input("Lietotājvārds", key="login_username")
             password = st.text_input("Parole", type="password", key="login_password")
-            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="login_remember_me")
             submit = st.form_submit_button("Pieslēgties", use_container_width=True)
             
             if submit:
                 if username and password:
-                    user = login(storage, username, password, remember_me=remember_me)
+                    user = login(storage, username, password)
                     if user:
                         st.rerun()
                     else:
@@ -2903,7 +2902,6 @@ def show_login():
             username = st.text_input("Lietotājvārds", key="signup_username")
             password = st.text_input("Parole", type="password", key="signup_password", help="Vismaz 8 simboli")
             password_repeat = st.text_input("Atkārtot paroli", type="password", key="signup_password_repeat")
-            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="signup_remember_me")
             submit = st.form_submit_button("Izveidot kontu", use_container_width=True)
             
             if submit:
@@ -2914,7 +2912,7 @@ def show_login():
                 elif len(password) < 8:
                     st.error("Parolei jābūt vismaz 8 simbolu garai.")
                 else:
-                    user = register(storage, username, password, display_name=None, remember_me=remember_me)
+                    user = register(storage, username, password, display_name=None)
                     if user:
                         st.success("Konts izveidots veiksmīgi!")
                         st.rerun()
