@@ -1,12 +1,10 @@
 """
 Autentifikācijas modulis ar lietotājvārdu un paroli.
-Atbalsta gan extra-streamlit-components CookieManager (Streamlit Cloud), gan failu sistēmu (lokāli).
 """
 import streamlit as st
 import secrets
 import hashlib
-import os
-from typing import Optional, Union
+from typing import Optional
 from datetime import datetime, timedelta
 
 try:
@@ -19,87 +17,20 @@ except ImportError:
 from .storage import Storage
 from .models import UserModel
 
-# Fallback uz failu sistēmu lokāli
-try:
-    from .cookie_manager import get_cookie as file_get_cookie, set_cookie as file_set_cookie, delete_cookie as file_delete_cookie
-    FILE_COOKIE_AVAILABLE = True
-except ImportError:
-    FILE_COOKIE_AVAILABLE = False
 
-
-class CookieManagerWrapper:
-    """Wrapper klase, kas atbalsta gan CookieManager, gan failu sistēmu."""
-    
-    def __init__(self, cookie_manager: Optional[CookieManager] = None):
-        self.cookie_manager = cookie_manager
-        self.use_file_fallback = cookie_manager is None and FILE_COOKIE_AVAILABLE
-    
-    def get(self, name: str) -> Optional[str]:
-        """Iegūst cookie vērtību."""
-        if self.cookie_manager is not None:
-            try:
-                return self.cookie_manager.get(name)
-            except Exception as e:
-                # Fallback uz failu sistēmu, ja CookieManager neizdodas
-                if FILE_COOKIE_AVAILABLE:
-                    return file_get_cookie(name)
-                return None
-        elif self.use_file_fallback:
-            return file_get_cookie(name)
+def get_cookie_manager() -> Optional[CookieManager]:
+    """Atgriež CookieManager instance no extra-streamlit-components."""
+    if not EXTRA_STREAMLIT_AVAILABLE:
         return None
     
-    def set(self, name: str, value: str):
-        """Iestata cookie vērtību."""
-        if self.cookie_manager is not None:
-            try:
-                self.cookie_manager.set(name, value)
-            except Exception as e:
-                # Fallback uz failu sistēmu, ja CookieManager neizdodas
-                if FILE_COOKIE_AVAILABLE:
-                    file_set_cookie(name, value, expires_days=30)
-        elif self.use_file_fallback:
-            file_set_cookie(name, value, expires_days=30)
-    
-    def delete(self, name: str):
-        """Dzēš cookie."""
-        if self.cookie_manager is not None:
-            try:
-                self.cookie_manager.delete(name)
-            except Exception:
-                # Fallback uz failu sistēmu
-                if FILE_COOKIE_AVAILABLE:
-                    file_delete_cookie(name)
-        elif self.use_file_fallback:
-            file_delete_cookie(name)
-
-
-def get_cookie_manager() -> Optional[CookieManagerWrapper]:
-    """
-    Atgriež CookieManagerWrapper instance.
-    Vispirms mēģina izmantot extra-streamlit-components CookieManager,
-    ja tas nav pieejams vai neizdodas, izmanto failu sistēmu fallback.
-    """
-    # Mēģina izmantot extra-streamlit-components CookieManager
-    cookie_manager = None
-    if EXTRA_STREAMLIT_AVAILABLE:
-        try:
-            if "cookie_manager" not in st.session_state:
-                cm = CookieManager()
-                st.session_state.cookie_manager = cm
-            cookie_manager = st.session_state.cookie_manager
-        except Exception as e:
-            # CookieManager neizdevās inicializēt, izmantosim fallback
-            pass
-    
-    # Ja CookieManager nav pieejams, izmantojam failu sistēmu fallback
-    if cookie_manager is None and not FILE_COOKIE_AVAILABLE:
+    try:
+        if "cookie_manager" not in st.session_state:
+            cm = CookieManager()
+            st.session_state.cookie_manager = cm
+        return st.session_state.cookie_manager
+    except Exception as e:
+        print(f"CookieManager inicializācijas kļūda: {e}")
         return None
-    
-    # Izveido wrapper
-    if "cookie_manager_wrapper" not in st.session_state:
-        st.session_state.cookie_manager_wrapper = CookieManagerWrapper(cookie_manager)
-    
-    return st.session_state.cookie_manager_wrapper
 
 
 def hash_token(token: str) -> str:
@@ -140,9 +71,8 @@ def login(storage: Storage, username: str, password: str, remember_me: bool = Fa
                     try:
                         # Saglabā plaintext token cookie (tikai šeit, DB glabā hash)
                         cookies.set("fp_remember_token", session_token)
-                    except Exception:
-                        # Kļūda saglabājot cookie, bet token jau ir DB, tāpēc nav kritiski
-                        pass
+                    except Exception as cookie_error:
+                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -182,9 +112,8 @@ def register(storage: Storage, username: str, password: str, display_name: Optio
                     try:
                         # Saglabā plaintext token cookie (tikai šeit, DB glabā hash)
                         cookies.set("fp_remember_token", session_token)
-                    except Exception:
-                        # Kļūda saglabājot cookie, bet token jau ir DB, tāpēc nav kritiski
-                        pass
+                    except Exception as cookie_error:
+                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -223,8 +152,8 @@ def get_current_user_from_cookie(storage: Storage) -> Optional[UserModel]:
                 st.session_state["user"] = user.id
                 st.session_state["username"] = user.username
                 return user
-    except Exception:
-        # Kļūda lasot cookie, bet nav kritiski
+    except Exception as e:
+        print(f"Cookie pārbaudes kļūda: {e}")
         return None
     
     return None
@@ -244,9 +173,8 @@ def logout(storage: Storage):
                 
                 # Dzēš cookie
                 cookies.delete("fp_remember_token")
-        except Exception:
-            # Kļūda dzēšot cookie, bet nav kritiski
-            pass
+        except Exception as e:
+            print(f"Logout cookie kļūda: {e}")
     
     # Notīra session_state
     if "user" in st.session_state:
