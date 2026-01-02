@@ -76,9 +76,9 @@ def login(storage: Storage, username: str, password: str, remember_me: bool = Fa
             cookies = get_cookie_manager()
             if cookies is not None:
                 try:
-                        cookies.set("fp_remember_token", session_token)
-                    except Exception as cookie_error:
-                        logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
+                    cookies.set("fp_remember_token", session_token)
+                except Exception as cookie_error:
+                    logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -121,9 +121,9 @@ def register(storage: Storage, username: str, password: str, display_name: Optio
             cookies = get_cookie_manager()
             if cookies is not None:
                 try:
-                        cookies.set("fp_remember_token", session_token)
-                    except Exception as cookie_error:
-                        logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
+                    cookies.set("fp_remember_token", session_token)
+                except Exception as cookie_error:
+                    logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -170,7 +170,7 @@ def get_current_user_from_cookie(storage: Storage) -> Optional[UserModel]:
             except Exception:
                 pass
     except Exception as e:
-        print(f"Cookie pārbaudes kļūda: {e}")
+        logging.debug(f"Cookie pārbaudes kļūda: {e}")
         # Mēģina dzēst cookie, ja ir problēma
         try:
             if cookies:
