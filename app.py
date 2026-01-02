@@ -23,6 +23,8 @@ import logging
 from src.models import CropModel, FieldModel, PlantingRecord, SoilType
 from src.planner import load_catalog, plan_for_years, plan_for_years_lookahead, recommend_for_field, recommend_with_scenarios, get_last_price_update, get_price_meta, recommend_for_all_fields_with_limits
 from src.storage import Storage
+from src.market_prices import get_price_history
+from src.scenarios import default_volatility_pct
 from src.prices import load_prices_with_fallback, load_prices_csv
 from src.price_provider import get_price_for_crop
 from src.profit import profit_eur_detailed
@@ -30,21 +32,77 @@ from src.analytics import crop_area_by_year
 from src.auth import login, register, logout, require_login
 import json
 
+# Konfigurācija - JĀBŪT PIRMAJAI Streamlit komandai
 st.set_page_config(
     page_title="Farm Planner",
     page_icon=None,
     layout="wide"
 )
 
+# Storage inicializācija - jānotiek pirms jebkāda UI renderēšanas
 try:
     if "storage" not in st.session_state:
         st.session_state.storage = Storage()
 except Exception as e:
-    st.error("Neizdevās pieslēgties datubāzei. Lūdzu, pārbaudiet iestatījumus.")
-    logging.error(f"Datubāzes inicializācijas kļūda: {e}")
+    st.error("**DB nav pieslēgts vai DB_URL ir nepareizs**")
+    st.markdown("""
+    **Problēma:** Neizdevās inicializēt datubāzi.
+    
+    **Risinājums:**
+    1. Atver Streamlit Cloud Settings → Secrets
+    2. Pārbaudiet vai DB_URL ir iestatīts pareizi
+    3. DB_URL jābūt PostgreSQL connection string, kas sākas ar `postgresql://` vai `postgres://`
+    4. Ja DB_URL nav nepieciešams, noņemiet to, lai izmantotu SQLite
+    
+    **Piemērs pareiza DB_URL:**
+    ```
+    postgresql://user:password@host:port/database
+    ```
+    """)
     st.stop()
 
+# Inicializācijas pārbaude (tikai servera logā)
+if 'debug_shown' not in st.session_state:
+    st.session_state.debug_shown = True
+    logging.debug("Aplikācija sākas...")
 
+
+def _show_price_source_info():
+    """
+    Parāda cenu avota informāciju (EC agridata vai lokālais katalogs).
+    """
+    last_update = get_last_price_update()
+    if last_update:
+        st.caption(f"**Cenas:** EC Agri-food Data Portal, atjaunots: {last_update}")
+    else:
+        st.caption("**Cenas:** lokālais katalogs (crops.json)")
+
+
+def _show_price_source_for_crop(crop_name: str):
+    """
+    Parāda cenu avotu konkrētai kultūrai.
+    """
+    try:
+        prices_fallback = load_prices_with_fallback()
+        price_info = prices_fallback.get(crop_name, {})
+        
+        if not price_info or price_info.get("price_eur_t") is None or price_info.get("price_eur_t") == 0:
+            st.caption("Nav cenas")
+            return
+        
+        source_type = price_info.get("source_type", "manual")
+        
+        if source_type == "market":
+            st.caption("Tirgus cena")
+        elif source_type == "proxy":
+            st.caption("Aprēķināta cena")
+        elif source_type == "manual":
+            st.caption("Lietotāja ievadīta cena")
+        else:
+            st.caption("Nav cenas")
+    except Exception:
+        # Fallback, ja neizdodas ielādēt
+        st.caption("Nav cenas")
 
 
 def _get_price_source_text(crop_name: str, crops_dict: Optional[Dict] = None) -> str:
@@ -102,6 +160,16 @@ def _get_price_source_text(crop_name: str, crops_dict: Optional[Dict] = None) ->
         return ""  # Nav avota, ja nav cenas
 
 
+def _price_badge(crop_name: str) -> str:
+    """
+    Atgriež vienkāršu tekstu par cenu avotu (cilvēkam saprotamu).
+    """
+    return _get_price_source_text(crop_name)
+
+
+def _agro_badge():
+    """Badge agrovides / zālāju kultūrām."""
+    return "Agrovides kultūra"
 
 
 def load_price_volatility() -> Dict[str, Dict[str, int]]:
@@ -251,7 +319,7 @@ def load_demo_data():
         result = storage.add_field(field, user_id)
         created_fields.append(result)
 
-    # Demo lauka vēsture (4 ieraksti katram laukam: current_year-4 līdz current_year-1)
+    # Demo sējumu vēsture (4 ieraksti katram laukam: current_year-4 līdz current_year-1)
     current_year = datetime.now().year
     
     # Reālistiskas rotācijas katram laukam (dažādas, lai nav identiskas)
@@ -458,6 +526,7 @@ def generate_report_text(
 def show_dashboard_section():
     """Sadaļa: Dashboard."""
     st.title("Dashboard")
+    st.caption("Sistēmas pārskats")
     
     if 'storage' not in st.session_state:
         st.error("Sistēma nav inicializēta")
@@ -493,12 +562,27 @@ def show_dashboard_section():
             est_profit = sum(f.area_ha * 300 for f in fields)  # demo
             st.metric("Potenciālā peļņa sezonā", f"{est_profit:,.0f} EUR")
         
+        # Īss skaidrojums
+        st.markdown("### Sistēmas apraksts")
+        st.write(
+            "Farm Planner ir vienkārša lēmumu atbalsta sistēma, "
+            "kas palīdz izvēlēties optimālas kultūras sēšanai, "
+            "balstoties uz augsni, sējumu vēsturi, ražību un cenām."
+        )
+        
+        # Ātrais ceļš
+        st.markdown("### Darba uzsākšana")
+        st.write("""
+        1. Pievienojiet laukus sadaļā **Lauki**
+        2. Ievadiet sējumu vēsturi
+        3. Dodieties uz sadaļu **Ieteikumi**, lai saņemtu plānu
+        """)
         
         # Analītika: Kultūru sadalījums pēc platības
         st.divider()
         st.subheader("Kultūru sadalījums pēc platības")
         
-        # Iegūst unikālos gadus no lauka vēstures
+        # Iegūst unikālos gadus no sējumu vēstures
         user_id = st.session_state["user"]
         all_plantings = storage.list_plantings(user_id)
         available_years = sorted(set(p.year for p in all_plantings), reverse=True)
@@ -556,6 +640,8 @@ def show_dashboard_section():
     else:
         # Nav datu - draudzīgs teksts
         st.info("Laipni lūdzam Farm Planner!")
+        st.write("Sāciet ar lauku pievienošanu sadaļā **Lauki**.")
+        st.write("Pēc tam varat pievienot sējumu vēsturi un saņemt ieteikumus.")
         
         # Īss skaidrojums
         st.markdown("### Kas tas ir?")
@@ -789,7 +875,7 @@ def show_fields_section():
                         st.error("Neizdevās saglabāt izmaiņas.")
 
         with st.expander("Dzēst lauku", expanded=False):
-            st.warning("Dzēšot lauku, tiks dzēsta arī tā vēsture.")
+            st.warning("Dzēšot lauku, tiks dzēsta arī tā sējumu vēsture.")
             confirm = st.checkbox("Apstiprinu dzēšanu", key="confirm_delete_field")
 
             if st.button("Dzēst", use_container_width=True, disabled=not confirm):
@@ -847,59 +933,65 @@ def show_history_section():
             # Datums
             op_date = st.date_input("Datums", value=datetime.now().date(), key="history_op_date")
             
-            # Darbību saraksts sakārtots pēc biežuma izmantošanas
+            # 1) Vienots darbību saraksts (ieskaitot lauka apstrādes darbības)
             actions = [
                 "Sēšana",
                 "Kūlšana",
-                "Mēslošana",
-                "Pļaušana",
-                "Augu aizsardzība",
-                "Kaļķošana",
-                "Miglošana",
-                "Stādīšana",
+                # Lauka apstrāde (iekš kopējā saraksta)
                 "Aršana",
-                "Kultivēšana",
-                "Diskošana",
-                "Mulčēšana",
-                "Ravēšana",
-                "Zaļmēslojuma iestrāde",
-                "Starpsējums / Segkultūra",
-                "Graudu žāvēšana",
-                "Graudu tīrīšana",
-                "Salmu presēšana",
-                "Salmu smalcināšana",
-                "Ražas transportēšana",
-                "Lauka apskate",
-                "Augsnes analīzes",
-                "Sēklas apstrāde",
-                "Apūdeņošana",
-                "Sējuma kopšana",
                 "Dziļirdināšana",
-                "Rugaines apstrāde",
-                "Sēklas gultnes sagatavošana",
-                "Šļūcotājs / Līmeņošana",
+                "Diskošana",
+                "Kultivēšana",
                 "Ecēšana",
                 "Veltņošana",
                 "Frēzēšana",
+                "Rugaines apstrāde",
+                "Sēklas gultnes sagatavošana",
+                "Šļūcotājs / Līmeņošana",
+                "Akmeņu ecēšana",
+                "Lauka rekultivācija",
+                # pārējās populārās
+                "Mēslošana",
+                "Miglošana",
+                "Kaļķošana",
+                "Sējuma kopšana",
+                "Augu aizsardzība (cits)",
+                "Stādīšana",
+                "Pļaušana",
+                "Mulčēšana",
+                "Ravēšana",
                 "Akmeņu lasīšana",
                 "Lauka planēšana",
                 "Drenāžas darbi",
                 "Malu/Grāvju pļaušana",
-                "Lauka rekultivācija",
+                "Apūdeņošana",
+                "Augsnes analīzes",
+                "Sēklas apstrāde",
+                "Ražas transportēšana",
+                "Graudu žāvēšana",
+                "Graudu tīrīšana",
+                "Salmu presēšana",
+                "Salmu smalcināšana",
+                "Zaļmēslojuma iestrāde",
+                "Starpsējums / Segkultūra",
+                "Lauka apskate",
                 "Cits"
             ]
             selected_action = st.selectbox("Darbības tips", options=actions, key="history_action")
             
+            # 2) Brīvais lauks, ja izvēlēts "Cits"
             custom_action = None
             if selected_action == "Cits":
                 custom_action = st.text_input(
-                    "Darbība",
+                    "Darbība (brīvi)",
                     key="history_custom_action",
                     placeholder="Piem.: Minerālmēslu izkliede, lauka mērīšana, u.c."
                 )
             
+            # Notes (text_area) - vienmēr redzams
             notes = st.text_area("Piezīmes", key="history_notes", height=100)
             
+            # 3) Kultūra select - rādās tikai, ja "Sēšana" vai "Kūlšana"
             crop = None
             selected_crop = None
             if selected_action == "Sēšana" or selected_action == "Kūlšana":
@@ -911,6 +1003,7 @@ def show_history_section():
                 else:
                     crop = selected_crop
             
+            # Papildus lauki (expander) - rādās tikai, ja tas ir jēdzīgi (Mēslošana, Miglošana, Kaļķošana)
             amount = None
             unit = None
             cost_eur = None
@@ -1822,6 +1915,7 @@ def compute_reco():
                     min_profit_threshold = best_profit_total * 0.95
                     
                     top3 = base_result.get('top3', [])
+                    # debug_info izmanto tikai iekšēji, neparāda UI
                     debug_info = base_result.get('debug_info', {})
                     scored = debug_info.get('scored', []) if debug_info else []
                     
@@ -2434,7 +2528,7 @@ def show_recommendations_section():
                     all_history = storage.list_plantings(user_id)
                     history = [p for p in all_history if p.field_id == selected_field.id]
                     if not history:
-                        st.error("Nav lauka vēstures. Pievienojiet vēsturi, lai iegūtu ieteikumus.")
+                        st.error("Nav sējumu vēstures šim laukam. Pievienojiet vēsturi, lai iegūtu ieteikumus.")
                     elif base_result and base_result.get('favorites_filter_message'):
                         st.error(base_result['favorites_filter_message'])
                     else:
@@ -2974,6 +3068,9 @@ def main():
     st.caption("Farm Planner • 2025")
 
 
+# Izsaucam main() funkciju vienmēr
+# Gan kad fails tiek palaists tieši, gan kad tiek importēts (piemēram, no app.py)
+# Šis kods izpildās, kad modulis tiek importēts
 try:
     main()
 except Exception as e:

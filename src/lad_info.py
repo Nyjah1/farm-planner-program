@@ -48,10 +48,11 @@ def fetch_block_info(block_code: str, debug: bool = False) -> Optional[Dict]:
                 # Izsauc API
                 response = requests.get(url, params=params, timeout=10)
                 
-                # Debug izvade
+                # Debug izvade (tikai servera logā)
                 if debug:
-                    print(f"[DEBUG] Request URL: {full_url}")
-                    print(f"[DEBUG] Status Code: {response.status_code}")
+                    import logging
+                    logging.debug(f"Request URL: {full_url}")
+                    logging.debug(f"Status Code: {response.status_code}")
                 
                 response.raise_for_status()
                 
@@ -59,22 +60,24 @@ def fetch_block_info(block_code: str, debug: bool = False) -> Optional[Dict]:
                 try:
                     data = response.json()
                     
-                    # Debug izvade JSON
+                    # Debug izvade JSON (tikai servera logā)
                     if debug:
-                        print(f"[DEBUG] Response is JSON")
+                        import logging
+                        logging.debug("Response is JSON")
                         if isinstance(data, dict):
-                            print(f"[DEBUG] JSON keys: {list(data.keys())}")
+                            logging.debug(f"JSON keys: {list(data.keys())}")
                             if "features" in data and len(data["features"]) > 0:
                                 feature = data["features"][0]
                                 if "attributes" in feature:
                                     attrs = feature["attributes"]
-                                    print(f"[DEBUG] Attributes field names: {list(attrs.keys())}")
+                                    logging.debug(f"Attributes field names: {list(attrs.keys())}")
                 except ValueError:
                     # Nav JSON
                     if debug:
+                        import logging
                         text_preview = response.text[:500]
-                        print(f"[DEBUG] Response is NOT JSON (first 500 chars):")
-                        print(text_preview)
+                        logging.debug("Response is NOT JSON (first 500 chars):")
+                        logging.debug(text_preview)
                     continue
                 
                 # Pārbauda, vai ir features
