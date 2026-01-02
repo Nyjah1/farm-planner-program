@@ -18,7 +18,6 @@ from urllib.parse import quote
 from typing import Optional, Dict
 import re
 import plotly.express as px
-import logging
 
 from src.models import CropModel, FieldModel, PlantingRecord, SoilType
 from src.planner import load_catalog, plan_for_years, plan_for_years_lookahead, recommend_for_field, recommend_with_scenarios, get_last_price_update, get_price_meta, recommend_for_all_fields_with_limits
@@ -59,12 +58,13 @@ except Exception as e:
     postgresql://user:password@host:port/database
     ```
     """)
+    st.code(str(e))
     st.stop()
 
 # Inicializācijas pārbaude (tikai servera logā)
 if 'debug_shown' not in st.session_state:
     st.session_state.debug_shown = True
-    logging.debug("Aplikācija sākas...")
+    print("Aplikācija sākas...")
 
 
 def _show_price_source_info():
@@ -1738,8 +1738,8 @@ def compute_reco():
             st.session_state["reco_result"] = None
             st.session_state["reco_error"] = f"Kļūda aprēķinot ieteikumus: {e}"
             import traceback
-            logging.error(f"Kļūda aprēķinot ieteikumus: {e}")
-            logging.debug(traceback.format_exc())
+            print(f"Kļūda: {e}")
+            print(traceback.format_exc())
         return
     
     # Pārbauda, vai ir lauks (vienam laukam)
@@ -1915,9 +1915,8 @@ def compute_reco():
                     min_profit_threshold = best_profit_total * 0.95
                     
                     top3 = base_result.get('top3', [])
-                    # debug_info izmanto tikai iekšēji, neparāda UI
                     debug_info = base_result.get('debug_info', {})
-                    scored = debug_info.get('scored', []) if debug_info else []
+                    scored = debug_info.get('scored', [])
                     
                     all_candidates = []
                     seen_crops = set()
@@ -2773,6 +2772,61 @@ def show_recommendations_section():
                             st.markdown("---")
                             st.markdown(f"**Peļņa:** {profit_per_ha:.2f} EUR/ha = {profit_total:.2f} EUR (kopā)")
                         
+                        # ========== DIAGNOSTIKA ==========
+                        debug_info = base_result.get('debug_info')
+                        if debug_info:
+                            with st.expander("Diagnostika", expanded=False):
+                                # Parāda nomu no lauka
+                                field_rent = getattr(selected_field, "rent_eur_ha", 0.0) or 0.0
+                                st.markdown(f"**Noma (EUR/ha):** {field_rent:.2f}")
+                                st.markdown("---")
+                                
+                                filtered_out = debug_info.get('filtered_out', [])
+                                if filtered_out:
+                                    st.markdown("#### Izslēgtas kultūras")
+                                    st.caption("Kultūras, kas nav atļautas pēc rotācijas noteikumiem")
+                                    filtered_out_data = []
+                                    for item in filtered_out:
+                                        reason_text = "Rotācijas noteikumi"
+                                        filtered_out_data.append({
+                                            "Kultūra": item['crop'],
+                                            "Iemesls": reason_text
+                                        })
+                                    st.dataframe(filtered_out_data, use_container_width=True, hide_index=True)
+                                
+                                scored = debug_info.get('scored', [])
+                                if scored:
+                                    st.markdown("#### Novērtētās kultūras")
+                                    scored_sorted = sorted(scored, key=lambda x: x['profit_total'], reverse=True)
+                                    scored_data = []
+                                    for item in scored_sorted:
+                                        diagnostic_warnings = item.get('diagnostic_warnings', [])
+                                        
+                                        warnings = item.get('warnings', [])
+                                        other_warnings = []
+                                        if warnings:
+                                            warning_labels = {
+                                                "yield_too_high": "Raža >20",
+                                                "price_too_high": "Cena >1200",
+                                                "cost_too_high": "Izmaksas >3000"
+                                            }
+                                            for w in warnings:
+                                                if w in warning_labels:
+                                                    other_warnings.append(warning_labels[w])
+                                        
+                                        all_warnings = diagnostic_warnings + other_warnings
+                                        warnings_text = "; ".join(all_warnings) if all_warnings else "—"
+                                        
+                                        scored_data.append({
+                                            "Kultūra": item['crop'],
+                                            "Ieņēmumi (EUR/ha)": f"{item['revenue_per_ha']:.2f}",
+                                            "Izmaksas (EUR/ha)": f"{item['cost_per_ha']:.2f}",
+                                            "Peļņa (EUR/ha)": f"{item['profit_per_ha']:.2f}",
+                                            "Peļņa (kopā)": f"{item['profit_total']:.2f}",
+                                            "Brīdinājumi": warnings_text
+                                        })
+                                    st.dataframe(scored_data, use_container_width=True, hide_index=True)
+                        
                         # ========== E) ADVANCED ANALYSIS - COLLAPSED ==========
                         with st.expander("Papildu analīze", expanded=False):
                             stability = scenario_result.get('stability', 0) if scenario_result else 0
@@ -2885,10 +2939,10 @@ def main():
             return
     except Exception as e:
         st.error(f"Kļūda: {e}")
-        import logging
+        st.exception(e)
         import traceback
-        logging.error(f"Kļūda: {e}")
-        logging.debug(traceback.format_exc())
+        print(f"Kļūda: {e}")
+        print(traceback.format_exc())
         return
     
     # Profesionāls CSS stils
@@ -3075,8 +3129,8 @@ try:
     main()
 except Exception as e:
     st.error(f"Kļūda izpildot aplikāciju: {e}")
-    import logging
+    st.exception(e)
     import traceback
-    logging.error(f"Kļūda izpildot aplikāciju: {e}")
-    logging.debug(traceback.format_exc())
+    print(f"Kļūda izpildot aplikāciju: {e}")
+    print(traceback.format_exc())
 

@@ -558,40 +558,45 @@ class Storage:
             # Pievieno foreign key constraints, ja tās nav (katra savā transakcijā)
             
             # Migrācija: pārveido auth_tokens tabulu uz jauno struktūru (token kā PRIMARY KEY)
-            try:
-                with get_db_cursor() as cursor:
-                    # Pārbauda, vai tabula eksistē ar veco struktūru (token_hash kolonna)
-                    cursor.execute("""
-                        SELECT column_name 
-                        FROM information_schema.columns 
-                        WHERE table_name = 'auth_tokens' 
-                        AND column_name = 'token_hash'
-                    """)
-                    if cursor.fetchone():
-                        # Vecā struktūra - migrē uz jauno
-                        # 1. Izveido jaunu tabulu ar pareizo struktūru
+            # Tikai PostgreSQL (SQLite nav nepieciešama migrācija, jo tabula tiek izveidota ar pareizo struktūru)
+            if is_postgres():
+                try:
+                    with get_db_cursor() as cursor:
+                        # Pārbauda, vai tabula eksistē ar veco struktūru (token_hash kolonna)
                         cursor.execute("""
-                            CREATE TABLE IF NOT EXISTS auth_tokens_new (
-                                token TEXT PRIMARY KEY,
-                                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                                expires_at TIMESTAMPTZ NOT NULL,
-                                created_at TIMESTAMPTZ DEFAULT NOW()
-                            )
+                            SELECT column_name 
+                            FROM information_schema.columns 
+                            WHERE table_name = 'auth_tokens' 
+                            AND column_name = 'token_hash'
                         """)
-                        # 2. Kopē datus no vecās tabulas
-                        cursor.execute("""
-                            INSERT INTO auth_tokens_new (token, user_id, expires_at, created_at)
-                            SELECT token_hash, user_id, expires_at, created_at
-                            FROM auth_tokens
-                            ON CONFLICT (token) DO NOTHING
-                        """)
-                        # 3. Dzēš veco tabulu
-                        cursor.execute("DROP TABLE IF EXISTS auth_tokens")
-                        # 4. Pārdēvē jauno tabulu
-                        cursor.execute("ALTER TABLE auth_tokens_new RENAME TO auth_tokens")
-            except Exception as e:
-                # Ja migrācija neizdodas, turpinām (var būt, ka tabula jau ir pareiza)
-                print(f"Migrācija auth_tokens struktūra: {e}")
+                        if cursor.fetchone():
+                            # Vecā struktūra - migrē uz jauno
+                            # 1. Izveido jaunu tabulu ar pareizo struktūru
+                            cursor.execute("""
+                                CREATE TABLE IF NOT EXISTS auth_tokens_new (
+                                    token TEXT PRIMARY KEY,
+                                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                    expires_at TIMESTAMPTZ NOT NULL,
+                                    created_at TIMESTAMPTZ DEFAULT NOW()
+                                )
+                            """)
+                            # 2. Kopē datus no vecās tabulas (izlaiž dublikātus)
+                            # Izmantojam DISTINCT ON, lai izvairītos no dublikātiem
+                            cursor.execute("""
+                                INSERT INTO auth_tokens_new (token, user_id, expires_at, created_at)
+                                SELECT DISTINCT ON (token_hash) token_hash, user_id, expires_at, created_at
+                                FROM auth_tokens
+                                WHERE NOT EXISTS (
+                                    SELECT 1 FROM auth_tokens_new WHERE token = auth_tokens.token_hash
+                                )
+                            """)
+                            # 3. Dzēš veco tabulu
+                            cursor.execute("DROP TABLE IF EXISTS auth_tokens")
+                            # 4. Pārdēvē jauno tabulu
+                            cursor.execute("ALTER TABLE auth_tokens_new RENAME TO auth_tokens")
+                except Exception as e:
+                    # Ja migrācija neizdodas, turpinām (var būt, ka tabula jau ir pareiza)
+                    print(f"Migrācija auth_tokens struktūra: {e}")
             
             # auth_tokens.user_id -> users.id FK constraint
             try:
