@@ -1,6 +1,7 @@
 """
 Autentifikācijas modulis ar lietotājvārdu un paroli.
 """
+# Fixed indentation for Python 3.13 compatibility
 import streamlit as st
 import secrets
 import hashlib
