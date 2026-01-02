@@ -4,6 +4,7 @@ Autentifikācijas modulis ar lietotājvārdu un paroli.
 import streamlit as st
 import secrets
 import hashlib
+import logging
 from typing import Optional
 from datetime import datetime, timedelta
 
@@ -29,7 +30,7 @@ def get_cookie_manager() -> Optional[CookieManager]:
             st.session_state.cookie_manager = cm
         return st.session_state.cookie_manager
     except Exception as e:
-        print(f"CookieManager inicializācijas kļūda: {e}")
+        logging.debug(f"CookieManager inicializācijas kļūda: {e}")
         return None
 
 
@@ -46,7 +47,7 @@ def login(storage: Storage, username: str, password: str, remember_me: bool = Fa
         storage: Storage instance
         username: Lietotājvārds
         password: Parole
-        remember_me: Vai saglabāt session uz ierīces
+        remember_me: Vai saglabāt session uz ierīces (True = 30 dienas, False = tikai sesija)
         
     Returns:
         UserModel vai None, ja autentifikācija neizdevās
@@ -57,22 +58,27 @@ def login(storage: Storage, username: str, password: str, remember_me: bool = Fa
         st.session_state["user"] = user.id
         st.session_state["username"] = user.username
         
-        # Ja remember_me, ģenerē un saglabā session token
+        # Ģenerē token vienmēr (gan remember_me=True, gan False)
+        session_token = secrets.token_urlsafe(32)
+        token_hash = hash_token(session_token)
+        
+        # Nosaka derīguma termiņu
         if remember_me:
-            # Ģenerē drošu token
-            session_token = secrets.token_urlsafe(32)
-            token_hash = hash_token(session_token)
+            # 30 dienas
             expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-            
-            # Saglabā token hash DB
-            if storage.create_remember_token(user.id, token_hash, expires_at):
-                cookies = get_cookie_manager()
-                if cookies is not None:
-                    try:
-                        # Saglabā plaintext token cookie (tikai šeit, DB glabā hash)
+        else:
+            # Tikai sesijai (līdz pārlūkprogrammas aizvēršanai)
+            # Iestatām īsu derīguma termiņu (1 diena), bet cookie būs session-only
+            expires_at = (datetime.now() + timedelta(days=1)).isoformat()
+        
+        # Saglabā token hash DB
+        if storage.create_remember_token(user.id, token_hash, expires_at):
+            cookies = get_cookie_manager()
+            if cookies is not None:
+                try:
                         cookies.set("fp_remember_token", session_token)
                     except Exception as cookie_error:
-                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
+                        logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -87,7 +93,7 @@ def register(storage: Storage, username: str, password: str, display_name: Optio
         username: Lietotājvārds
         password: Parole
         display_name: Opcionāls parādāmais vārds (ja nav, izmanto username)
-        remember_me: Vai saglabāt session uz ierīces
+        remember_me: Vai saglabāt session uz ierīces (True = 30 dienas, False = tikai sesija)
         
     Returns:
         UserModel vai None, ja reģistrācija neizdevās
@@ -98,22 +104,26 @@ def register(storage: Storage, username: str, password: str, display_name: Optio
         st.session_state["user"] = user.id
         st.session_state["username"] = user.username
         
-        # Ja remember_me, ģenerē un saglabā session token
+        # Ģenerē token vienmēr (gan remember_me=True, gan False)
+        session_token = secrets.token_urlsafe(32)
+        token_hash = hash_token(session_token)
+        
+        # Nosaka derīguma termiņu
         if remember_me:
-            # Ģenerē drošu token
-            session_token = secrets.token_urlsafe(32)
-            token_hash = hash_token(session_token)
+            # 30 dienas
             expires_at = (datetime.now() + timedelta(days=30)).isoformat()
-            
-            # Saglabā token hash DB
-            if storage.create_remember_token(user.id, token_hash, expires_at):
-                cookies = get_cookie_manager()
-                if cookies is not None:
-                    try:
-                        # Saglabā plaintext token cookie (tikai šeit, DB glabā hash)
+        else:
+            # Tikai sesijai (līdz pārlūkprogrammas aizvēršanai)
+            expires_at = (datetime.now() + timedelta(days=1)).isoformat()
+        
+        # Saglabā token hash DB
+        if storage.create_remember_token(user.id, token_hash, expires_at):
+            cookies = get_cookie_manager()
+            if cookies is not None:
+                try:
                         cookies.set("fp_remember_token", session_token)
                     except Exception as cookie_error:
-                        print(f"Neizdevās saglabāt cookie: {cookie_error}")
+                        logging.debug(f"Neizdevās saglabāt cookie: {cookie_error}")
         
         return user
     return None
@@ -122,6 +132,7 @@ def register(storage: Storage, username: str, password: str, display_name: Optio
 def get_current_user_from_cookie(storage: Storage) -> Optional[UserModel]:
     """
     Pārbauda, vai ir derīgs remember_token cookie un atgriež UserModel.
+    Ja token nav derīgs, dzēš cookie.
     
     Args:
         storage: Storage instance
@@ -152,8 +163,20 @@ def get_current_user_from_cookie(storage: Storage) -> Optional[UserModel]:
                 st.session_state["user"] = user.id
                 st.session_state["username"] = user.username
                 return user
+        else:
+            # Token nav derīgs - dzēš cookie
+            try:
+                cookies.delete("fp_remember_token")
+            except Exception:
+                pass
     except Exception as e:
         print(f"Cookie pārbaudes kļūda: {e}")
+        # Mēģina dzēst cookie, ja ir problēma
+        try:
+            if cookies:
+                cookies.delete("fp_remember_token")
+        except Exception:
+            pass
         return None
     
     return None
@@ -174,7 +197,7 @@ def logout(storage: Storage):
                 # Dzēš cookie
                 cookies.delete("fp_remember_token")
         except Exception as e:
-            print(f"Logout cookie kļūda: {e}")
+            logging.debug(f"Logout cookie kļūda: {e}")
     
     # Notīra session_state
     if "user" in st.session_state:
@@ -186,7 +209,9 @@ def logout(storage: Storage):
 def require_login(storage: Storage) -> Optional[UserModel]:
     """
     Pārbauda, vai lietotājs ir ielogots. Ja nav, atgriež None.
-    Vispirms pārbauda session_state, pēc tam cookie.
+    
+    Svarīgi: Nekad neizmantot tikai st.session_state kā auth avotu.
+    Vienmēr pārbaudīt cookie, lai nodrošinātu, ka lietotājs ir ielogots arī pēc refresh.
     
     Args:
         storage: Storage instance
@@ -194,16 +219,19 @@ def require_login(storage: Storage) -> Optional[UserModel]:
     Returns:
         UserModel vai None, ja nav ielogots
     """
-    # Pārbauda session_state (per-browser, per-session)
+    # Pirmkārt pārbauda cookie (DB-backed token)
+    # Tas nodrošina, ka lietotājs paliek ielogots arī pēc refresh
+    user = get_current_user_from_cookie(storage)
+    if user:
+        return user
+    
+    # Fallback uz session_state (tikai, ja nav cookie)
+    # Bet šis nedrīkst būt vienīgais avots
     if "user" in st.session_state:
         user_id = st.session_state["user"]
         user = storage.get_user_by_id(user_id)
         if user:
+            # Validē, ka lietotājs vēl eksistē DB
             return user
-    
-    # Pārbauda cookie (remember me)
-    user = get_current_user_from_cookie(storage)
-    if user:
-        return user
     
     return None

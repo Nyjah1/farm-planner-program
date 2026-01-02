@@ -5,6 +5,7 @@ import json
 import sys
 import io
 import os
+import logging
 from pathlib import Path
 from typing import List, Optional, Dict, Union
 
@@ -98,7 +99,7 @@ class Storage:
                     cursor.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
             except Exception as e:
                 # pgcrypto might already exist or not be available, continue
-                print(f"Brīdinājums: neizdevās izveidot pgcrypto extension: {e}")
+                logging.debug(f"Neizdevās izveidot pgcrypto extension: {e}")
         
         # Users tabula ar PRIMARY KEY - JĀBŪT PIRMAJAI
         # Izveido ar vienu transakciju, lai nodrošinātu, ka PRIMARY KEY ir definēts
@@ -131,53 +132,24 @@ class Storage:
         except Exception as e:
             raise RuntimeError(f"Kļūda migrējot users tabulu: {e}") from e
         
-        # User sessions tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
-        try:
-            with get_db_cursor() as cursor:
-                if is_postgres():
-                    cursor.execute("""
-                        CREATE TABLE IF NOT EXISTS user_sessions (
-                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                            session_token TEXT UNIQUE NOT NULL,
-                            created_at TIMESTAMPTZ DEFAULT NOW(),
-                            expires_at TIMESTAMPTZ NOT NULL
-                        )
-                    """)
-                else:
-                    id_type = _get_auto_increment()
-                    cursor.execute(f"""
-                        CREATE TABLE IF NOT EXISTS user_sessions (
-                            id {id_type},
-                            user_id INTEGER NOT NULL REFERENCES users(id),
-                            session_token TEXT NOT NULL UNIQUE,
-                            created_at TEXT NOT NULL,
-                            expires_at TEXT NOT NULL
-                        )
-                    """)
-        except Exception as e:
-            raise RuntimeError(f"Kļūda izveidojot user_sessions tabulu: {e}") from e
-        
         # Auth tokens tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
+        # token_hash ir PRIMARY KEY (drošības labad glabājam hash, nevis plaintext token)
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
-                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                            token TEXT PRIMARY KEY,
                             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                            token_hash TEXT UNIQUE NOT NULL,
                             expires_at TIMESTAMPTZ NOT NULL,
                             created_at TIMESTAMPTZ DEFAULT NOW()
                         )
                     """)
                 else:
-                    id_type = _get_auto_increment()
-                    cursor.execute(f"""
+                    cursor.execute("""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
-                            id {id_type},
+                            token TEXT PRIMARY KEY,
                             user_id INTEGER NOT NULL REFERENCES users(id),
-                            token_hash TEXT NOT NULL UNIQUE,
                             expires_at TEXT NOT NULL,
                             created_at TEXT NOT NULL
                         )
@@ -362,7 +334,7 @@ class Storage:
         try:
             self._load_default_carbon_factors()
         except Exception as e:
-            print(f"Brīdinājums: neizdevās ielādēt default oglekļa koeficientus: {e}")
+            logging.debug(f"Neizdevās ielādēt default oglekļa koeficientus: {e}")
         
         # Migrācija: pievieno kolonnas, ja tās neeksistē
         try:
@@ -464,7 +436,7 @@ class Storage:
                     """)
                     table_exists = cursor.fetchone()[0]
             except Exception as e:
-                print(f"Migrācija users tabula eksistence: {e}")
+                logging.debug(f"Migrācija users tabula eksistence: {e}")
                 return
             
             if table_exists:
@@ -500,7 +472,7 @@ class Storage:
                                 # Nav id kolonnas - izveido
                                 cursor.execute("ALTER TABLE users ADD COLUMN id BIGSERIAL PRIMARY KEY")
                 except Exception as e:
-                    print(f"Migrācija users PRIMARY KEY: {e}")
+                    logging.debug(f"Migrācija users PRIMARY KEY: {e}")
                 
                 # Pārbauda, vai username ir UNIQUE
                 try:
@@ -516,7 +488,7 @@ class Storage:
                             # Nav UNIQUE constraint - pievieno
                             cursor.execute("ALTER TABLE users ADD CONSTRAINT users_username_unique UNIQUE (username)")
                 except Exception as e:
-                    print(f"Migrācija users UNIQUE: {e}")
+                    logging.debug(f"Migrācija users UNIQUE: {e}")
                 
                 # Pārbauda, vai created_at ir ar DEFAULT
                 try:
@@ -532,7 +504,7 @@ class Storage:
                             # Nav DEFAULT - pievieno
                             cursor.execute("ALTER TABLE users ALTER COLUMN created_at SET DEFAULT now()")
                 except Exception as e:
-                    print(f"Migrācija users created_at DEFAULT: {e}")
+                    logging.debug(f"Migrācija users created_at DEFAULT: {e}")
         else:
             # SQLite: PRIMARY KEY jau ir definēts ar INTEGER PRIMARY KEY AUTOINCREMENT
             # Pārbauda, vai username ir UNIQUE (jau ir definēts ar UNIQUE constraint)
@@ -559,7 +531,43 @@ class Storage:
             
             # Pievieno foreign key constraints, ja tās nav (katra savā transakcijā)
             
-            # auth_tokens.user_id -> users.id
+            # Migrācija: pārveido auth_tokens tabulu uz jauno struktūru (token kā PRIMARY KEY)
+            try:
+                with get_db_cursor() as cursor:
+                    # Pārbauda, vai tabula eksistē ar veco struktūru (token_hash kolonna)
+                    cursor.execute("""
+                        SELECT column_name 
+                        FROM information_schema.columns 
+                        WHERE table_name = 'auth_tokens' 
+                        AND column_name = 'token_hash'
+                    """)
+                    if cursor.fetchone():
+                        # Vecā struktūra - migrē uz jauno
+                        # 1. Izveido jaunu tabulu ar pareizo struktūru
+                        cursor.execute("""
+                            CREATE TABLE IF NOT EXISTS auth_tokens_new (
+                                token TEXT PRIMARY KEY,
+                                user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                                expires_at TIMESTAMPTZ NOT NULL,
+                                created_at TIMESTAMPTZ DEFAULT NOW()
+                            )
+                        """)
+                        # 2. Kopē datus no vecās tabulas
+                        cursor.execute("""
+                            INSERT INTO auth_tokens_new (token, user_id, expires_at, created_at)
+                            SELECT token_hash, user_id, expires_at, created_at
+                            FROM auth_tokens
+                            ON CONFLICT (token) DO NOTHING
+                        """)
+                        # 3. Dzēš veco tabulu
+                        cursor.execute("DROP TABLE IF EXISTS auth_tokens")
+                        # 4. Pārdēvē jauno tabulu
+                        cursor.execute("ALTER TABLE auth_tokens_new RENAME TO auth_tokens")
+            except Exception as e:
+                # Ja migrācija neizdodas, turpinām (var būt, ka tabula jau ir pareiza)
+                logging.debug(f"Migrācija auth_tokens struktūra: {e}")
+            
+            # auth_tokens.user_id -> users.id FK constraint
             try:
                 with get_db_cursor() as cursor:
                     cursor.execute("""
@@ -576,7 +584,7 @@ class Storage:
                             FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
                         """)
             except Exception as e:
-                print(f"Migrācija auth_tokens FK: {e}")
+                logging.debug(f"Migrācija auth_tokens FK: {e}")
             
             # fields.owner_user_id -> users.id
             try:
@@ -595,7 +603,7 @@ class Storage:
                             FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
                         """)
             except Exception as e:
-                print(f"Migrācija fields FK: {e}")
+                logging.debug(f"Migrācija fields FK: {e}")
             
             # plantings.owner_user_id -> users.id
             try:
@@ -614,26 +622,7 @@ class Storage:
                             FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE CASCADE
                         """)
             except Exception as e:
-                print(f"Migrācija plantings FK: {e}")
-            
-            # user_sessions.user_id -> users.id
-            try:
-                with get_db_cursor() as cursor:
-                    cursor.execute("""
-                        SELECT constraint_name 
-                        FROM information_schema.table_constraints 
-                        WHERE table_name = 'user_sessions' 
-                        AND constraint_type = 'FOREIGN KEY'
-                        AND constraint_name LIKE '%user_id%'
-                    """)
-                    if not cursor.fetchone():
-                        cursor.execute("""
-                            ALTER TABLE user_sessions 
-                            ADD CONSTRAINT user_sessions_user_id_fkey 
-                            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-                        """)
-            except Exception as e:
-                print(f"Migrācija user_sessions FK: {e}")
+                logging.debug(f"Migrācija plantings FK: {e}")
             
             # plantings.field_id -> fields.id (ja nav)
             try:
@@ -652,7 +641,7 @@ class Storage:
                             FOREIGN KEY (field_id) REFERENCES fields(id) ON DELETE CASCADE
                         """)
             except Exception as e:
-                print(f"Migrācija plantings field_id FK: {e}")
+                logging.debug(f"Migrācija plantings field_id FK: {e}")
         else:
             # SQLite: foreign key constraints tiek pievienotas tabulas izveides laikā
             # Bet var mēģināt pievienot arī pēc tam
@@ -661,7 +650,7 @@ class Storage:
                 # Bet var pārbaudīt, vai tabulas ir pareizi definētas
                 pass
             except Exception as e:
-                print(f"Migrācija SQLite FK: {e}")
+                logging.debug(f"Migrācija SQLite FK: {e}")
     
     def _migrate_columns(self):
         """Pievieno jaunas kolonnas, ja tās neeksistē."""
@@ -961,88 +950,28 @@ class Storage:
                 created_at = created_at.isoformat()
             return UserModel(id=user_id, username=username, password_hash=password_hash, created_at=str(created_at))
     
-    def create_session(self, user_id: Union[int, str], session_token: str, expires_at: str) -> bool:
-        """Izveido jaunu session ierakstu."""
-        placeholder = _get_placeholder()
-        created_at = datetime.now().isoformat()
-        
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                f"INSERT INTO user_sessions (user_id, session_token, created_at, expires_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
-                (user_id, session_token, created_at, expires_at)
-            )
-            conn.commit()
-            cursor.close()
-            return True
-        except Exception:
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-    
-    def get_session_by_token(self, session_token: str) -> Optional[Dict]:
-        """Iegūst session pēc token un pārbauda, vai tas nav beidzies."""
-        placeholder = _get_placeholder()
-        
-        with get_db_cursor() as cursor:
-            cursor.execute(
-                f"SELECT user_id, expires_at FROM user_sessions WHERE session_token = {placeholder}",
-                (session_token,)
-            )
-            row = cursor.fetchone()
-            
-            if not row:
-                return None
-            
-            user_id, expires_at_str = row
-            
-            # Pārbauda, vai session nav beidzies
-            try:
-                expires_at = datetime.fromisoformat(expires_at_str)
-                if datetime.now() > expires_at:
-                    # Session beidzies - izdzēš to
-                    self.delete_session_by_token(session_token)
-                    return None
-            except (ValueError, TypeError):
-                # Nevar parsēt datumu - uzskata par nederīgu
-                self.delete_session_by_token(session_token)
-                return None
-            
-            return {"user_id": user_id, "expires_at": expires_at_str}
-    
-    def delete_session_by_token(self, session_token: str) -> bool:
-        """Dzēš session pēc token."""
-        placeholder = _get_placeholder()
-        
-        conn = get_connection()
-        try:
-            cursor = conn.cursor()
-            cursor.execute(
-                f"DELETE FROM user_sessions WHERE session_token = {placeholder}",
-                (session_token,)
-            )
-            conn.commit()
-            cursor.close()
-            return True
-        except Exception:
-            conn.rollback()
-            return False
-        finally:
-            conn.close()
-    
     def create_remember_token(self, user_id: Union[int, str], token_hash: str, expires_at: str) -> bool:
-        """Izveido jaunu remember token ierakstu (token_hash jau ir hash)."""
+        """
+        Izveido jaunu remember token ierakstu.
+        
+        Args:
+            user_id: Lietotāja ID
+            token_hash: Token hash (SHA256)
+            expires_at: Derīguma termiņš (ISO format string)
+        
+        Returns:
+            True, ja izveidots veiksmīgi, False citādi
+        """
         placeholder = _get_placeholder()
         created_at = datetime.now().isoformat()
         
         conn = get_connection()
         try:
             cursor = conn.cursor()
+            # token_hash ir PRIMARY KEY (glabājam hash drošības labad)
             cursor.execute(
-                f"INSERT INTO auth_tokens (user_id, token_hash, expires_at, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
-                (user_id, token_hash, expires_at, created_at)
+                f"INSERT INTO auth_tokens (token, user_id, expires_at, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                (token_hash, user_id, expires_at, created_at)
             )
             conn.commit()
             cursor.close()
@@ -1053,13 +982,23 @@ class Storage:
         finally:
             conn.close()
     
-    def verify_remember_token(self, token_hash: str) -> Optional[int]:
-        """Pārbauda, vai token_hash ir derīgs un atgriež user_id."""
+    def verify_remember_token(self, token_hash: str) -> Optional[Union[int, str]]:
+        """
+        Pārbauda, vai token_hash ir derīgs un atgriež user_id.
+        Ja token nav derīgs vai beidzies, dzēš to no DB.
+        
+        Args:
+            token_hash: Token hash (SHA256)
+        
+        Returns:
+            user_id (int vai str/UUID) vai None, ja token nav derīgs
+        """
         placeholder = _get_placeholder()
         
         with get_db_cursor() as cursor:
+            # token_hash ir PRIMARY KEY (kolonna nosaukums ir "token")
             cursor.execute(
-                f"SELECT user_id, expires_at FROM auth_tokens WHERE token_hash = {placeholder}",
+                f"SELECT user_id, expires_at FROM auth_tokens WHERE token = {placeholder}",
                 (token_hash,)
             )
             row = cursor.fetchone()
@@ -1092,14 +1031,23 @@ class Storage:
             return user_id
     
     def revoke_remember_token(self, token_hash: str) -> bool:
-        """Invalidē remember token (izdzēš no DB)."""
+        """
+        Invalidē remember token (izdzēš no DB).
+        
+        Args:
+            token_hash: Token hash (SHA256)
+        
+        Returns:
+            True, ja izdzēsts veiksmīgi, False citādi
+        """
         placeholder = _get_placeholder()
         
         conn = get_connection()
         try:
             cursor = conn.cursor()
+            # token_hash ir PRIMARY KEY (kolonna nosaukums ir "token")
             cursor.execute(
-                f"DELETE FROM auth_tokens WHERE token_hash = {placeholder}",
+                f"DELETE FROM auth_tokens WHERE token = {placeholder}",
                 (token_hash,)
             )
             conn.commit()
@@ -1428,7 +1376,7 @@ class Storage:
                         )
                 return True
         except Exception as e:
-            print(f"[ERROR] Neizdevās saglabāt favorītus: {e}")
+            logging.error(f" Neizdevās saglabāt favorītus: {e}")
             return False
     
     def add_field_history(
@@ -1485,7 +1433,7 @@ class Storage:
                     )
                 return True
         except Exception as e:
-            print(f"[ERROR] Neizdevās pievienot lauka vēstures ierakstu: {e}")
+            logging.error(f" Neizdevās pievienot lauka vēstures ierakstu: {e}")
             return False
     
     def list_field_history(
@@ -1582,7 +1530,7 @@ class Storage:
                 )
                 return cursor.rowcount > 0
         except Exception as e:
-            print(f"[ERROR] Neizdevās dzēst lauka vēstures ierakstu: {e}")
+            logging.error(f" Neizdevās dzēst lauka vēstures ierakstu: {e}")
             return False
     
     def update_field_history(
@@ -1670,7 +1618,7 @@ class Storage:
                 )
                 return cursor.rowcount > 0
         except Exception as e:
-            print(f"[ERROR] Neizdevās atjaunot lauka vēstures ierakstu: {e}")
+            logging.error(f" Neizdevās atjaunot lauka vēstures ierakstu: {e}")
             return False
     
     def get_carbon_factor(self, action_key: str) -> float:
@@ -1699,7 +1647,7 @@ class Storage:
                     return float(row[0])
                 return 0.0
         except Exception as e:
-            print(f"[ERROR] Neizdevās iegūt oglekļa koeficientu: {e}")
+            logging.error(f" Neizdevās iegūt oglekļa koeficientu: {e}")
             return 0.0
     
     def get_all_carbon_factors(self) -> Dict[str, Dict]:
@@ -1727,7 +1675,7 @@ class Storage:
                     }
                 return result
         except Exception as e:
-            print(f"[ERROR] Neizdevās iegūt oglekļa koeficientus: {e}")
+            logging.error(f" Neizdevās iegūt oglekļa koeficientus: {e}")
             return {}
     
     def update_carbon_factor(
@@ -1779,7 +1727,7 @@ class Storage:
                     )
                 return True
         except Exception as e:
-            print(f"[ERROR] Neizdevās saglabāt oglekļa koeficientu: {e}")
+            logging.error(f" Neizdevās saglabāt oglekļa koeficientu: {e}")
             return False
     
     def reset_carbon_factors_to_default(self) -> bool:
@@ -1798,5 +1746,5 @@ class Storage:
             self._load_default_carbon_factors()
             return True
         except Exception as e:
-            print(f"[ERROR] Neizdevās atjaunot default oglekļa koeficientus: {e}")
+            logging.error(f" Neizdevās atjaunot default oglekļa koeficientus: {e}")
             return False
