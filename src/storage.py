@@ -159,23 +159,25 @@ class Storage:
             raise RuntimeError(f"Kļūda izveidojot user_sessions tabulu: {e}") from e
         
         # Auth tokens tabula ar FK uz users.id (users tabula jau ir izveidota ar PRIMARY KEY)
-        # token_hash ir PRIMARY KEY (drošības labad glabājam hash, nevis plaintext token)
         try:
             with get_db_cursor() as cursor:
                 if is_postgres():
                     cursor.execute("""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
-                            token TEXT PRIMARY KEY,
+                            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                             user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                            token_hash TEXT UNIQUE NOT NULL,
                             expires_at TIMESTAMPTZ NOT NULL,
                             created_at TIMESTAMPTZ DEFAULT NOW()
                         )
                     """)
                 else:
-                    cursor.execute("""
+                    id_type = _get_auto_increment()
+                    cursor.execute(f"""
                         CREATE TABLE IF NOT EXISTS auth_tokens (
-                            token TEXT PRIMARY KEY,
+                            id {id_type},
                             user_id INTEGER NOT NULL REFERENCES users(id),
+                            token_hash TEXT NOT NULL UNIQUE,
                             expires_at TEXT NOT NULL,
                             created_at TEXT NOT NULL
                         )
@@ -557,48 +559,7 @@ class Storage:
             
             # Pievieno foreign key constraints, ja tās nav (katra savā transakcijā)
             
-            # Migrācija: pārveido auth_tokens tabulu uz jauno struktūru (token kā PRIMARY KEY)
-            # Tikai PostgreSQL (SQLite nav nepieciešama migrācija, jo tabula tiek izveidota ar pareizo struktūru)
-            if is_postgres():
-                try:
-                    with get_db_cursor() as cursor:
-                        # Pārbauda, vai tabula eksistē ar veco struktūru (token_hash kolonna)
-                        cursor.execute("""
-                            SELECT column_name 
-                            FROM information_schema.columns 
-                            WHERE table_name = 'auth_tokens' 
-                            AND column_name = 'token_hash'
-                        """)
-                        if cursor.fetchone():
-                            # Vecā struktūra - migrē uz jauno
-                            # 1. Izveido jaunu tabulu ar pareizo struktūru
-                            cursor.execute("""
-                                CREATE TABLE IF NOT EXISTS auth_tokens_new (
-                                    token TEXT PRIMARY KEY,
-                                    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                                    expires_at TIMESTAMPTZ NOT NULL,
-                                    created_at TIMESTAMPTZ DEFAULT NOW()
-                                )
-                            """)
-                            # 2. Kopē datus no vecās tabulas (izlaiž dublikātus)
-                            # Izmantojam DISTINCT ON, lai izvairītos no dublikātiem
-                            cursor.execute("""
-                                INSERT INTO auth_tokens_new (token, user_id, expires_at, created_at)
-                                SELECT DISTINCT ON (token_hash) token_hash, user_id, expires_at, created_at
-                                FROM auth_tokens
-                                WHERE NOT EXISTS (
-                                    SELECT 1 FROM auth_tokens_new WHERE token = auth_tokens.token_hash
-                                )
-                            """)
-                            # 3. Dzēš veco tabulu
-                            cursor.execute("DROP TABLE IF EXISTS auth_tokens")
-                            # 4. Pārdēvē jauno tabulu
-                            cursor.execute("ALTER TABLE auth_tokens_new RENAME TO auth_tokens")
-                except Exception as e:
-                    # Ja migrācija neizdodas, turpinām (var būt, ka tabula jau ir pareiza)
-                    print(f"Migrācija auth_tokens struktūra: {e}")
-            
-            # auth_tokens.user_id -> users.id FK constraint
+            # auth_tokens.user_id -> users.id
             try:
                 with get_db_cursor() as cursor:
                     cursor.execute("""
@@ -1072,27 +1033,16 @@ class Storage:
             conn.close()
     
     def create_remember_token(self, user_id: Union[int, str], token_hash: str, expires_at: str) -> bool:
-        """
-        Izveido jaunu remember token ierakstu.
-        
-        Args:
-            user_id: Lietotāja ID
-            token_hash: Token hash (SHA256)
-            expires_at: Derīguma termiņš (ISO format string)
-        
-        Returns:
-            True, ja izveidots veiksmīgi, False citādi
-        """
+        """Izveido jaunu remember token ierakstu (token_hash jau ir hash)."""
         placeholder = _get_placeholder()
         created_at = datetime.now().isoformat()
         
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            # token_hash ir PRIMARY KEY (glabājam hash drošības labad)
             cursor.execute(
-                f"INSERT INTO auth_tokens (token, user_id, expires_at, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
-                (token_hash, user_id, expires_at, created_at)
+                f"INSERT INTO auth_tokens (user_id, token_hash, expires_at, created_at) VALUES ({placeholder}, {placeholder}, {placeholder}, {placeholder})",
+                (user_id, token_hash, expires_at, created_at)
             )
             conn.commit()
             cursor.close()
@@ -1103,23 +1053,13 @@ class Storage:
         finally:
             conn.close()
     
-    def verify_remember_token(self, token_hash: str) -> Optional[Union[int, str]]:
-        """
-        Pārbauda, vai token_hash ir derīgs un atgriež user_id.
-        Ja token nav derīgs vai beidzies, dzēš to no DB.
-        
-        Args:
-            token_hash: Token hash (SHA256)
-        
-        Returns:
-            user_id (int vai str/UUID) vai None, ja token nav derīgs
-        """
+    def verify_remember_token(self, token_hash: str) -> Optional[int]:
+        """Pārbauda, vai token_hash ir derīgs un atgriež user_id."""
         placeholder = _get_placeholder()
         
         with get_db_cursor() as cursor:
-            # token_hash ir PRIMARY KEY (kolonna nosaukums ir "token")
             cursor.execute(
-                f"SELECT user_id, expires_at FROM auth_tokens WHERE token = {placeholder}",
+                f"SELECT user_id, expires_at FROM auth_tokens WHERE token_hash = {placeholder}",
                 (token_hash,)
             )
             row = cursor.fetchone()
@@ -1152,23 +1092,14 @@ class Storage:
             return user_id
     
     def revoke_remember_token(self, token_hash: str) -> bool:
-        """
-        Invalidē remember token (izdzēš no DB).
-        
-        Args:
-            token_hash: Token hash (SHA256)
-        
-        Returns:
-            True, ja izdzēsts veiksmīgi, False citādi
-        """
+        """Invalidē remember token (izdzēš no DB)."""
         placeholder = _get_placeholder()
         
         conn = get_connection()
         try:
             cursor = conn.cursor()
-            # token_hash ir PRIMARY KEY (kolonna nosaukums ir "token")
             cursor.execute(
-                f"DELETE FROM auth_tokens WHERE token = {placeholder}",
+                f"DELETE FROM auth_tokens WHERE token_hash = {placeholder}",
                 (token_hash,)
             )
             conn.commit()
