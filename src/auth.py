@@ -1,129 +1,166 @@
-"""
-Autentifikācijas modulis ar lietotājvārdu un paroli.
-"""
 import streamlit as st
 import bcrypt
 import uuid
-from datetime import datetime
-from typing import Optional
-from .storage import Storage
-from .models import UserModel
+from datetime import datetime, timedelta
+
+from src.storage import Storage
+
+COOKIE_KEY = "fp_auth_token"
+COOKIE_DAYS = 30
 
 
-def login(storage: Storage, username: str, password: str, remember_me: bool = False) -> Optional[UserModel]:
-    """
-    Ielogo lietotāju.
-    
-    Args:
-        storage: Storage instance
-        username: Lietotājvārds
-        password: Parole
-        remember_me: Vai saglabāt sesiju uz ierīces
-        
-    Returns:
-        UserModel vai None, ja autentifikācija neizdevās
-    """
-    user = storage.authenticate_user(username, password)
-    if user:
-        st.session_state["user"] = user.id
-        st.session_state["username"] = user.username
-        
-        if remember_me:
-            try:
-                from extra_streamlit_components import CookieManager
-                cookies = CookieManager()
-                cookie_token = str(uuid.uuid4())
-                cookies.set("fp_session", cookie_token)
-                st.session_state["fp_session_token"] = cookie_token
-            except:
-                pass
-        
-        return user
-    return None
+def _get_storage() -> Storage:
+    if "storage" not in st.session_state or st.session_state.storage is None:
+        st.session_state.storage = Storage()
+    return st.session_state.storage
 
 
-def register(storage: Storage, username: str, password: str, display_name: Optional[str] = None, remember_me: bool = False) -> Optional[UserModel]:
-    """
-    Reģistrē jaunu lietotāju.
-    
-    Args:
-        storage: Storage instance
-        username: Lietotājvārds
-        password: Parole
-        display_name: Opcionāls parādāmais vārds
-        remember_me: Vai saglabāt sesiju uz ierīces
-        
-    Returns:
-        UserModel vai None, ja reģistrācija neizdevās
-    """
-    user = storage.create_user(username, password, display_name)
-    if user:
-        st.session_state["user"] = user.id
-        st.session_state["username"] = user.username
-        
-        if remember_me:
-            try:
-                from extra_streamlit_components import CookieManager
-                cookies = CookieManager()
-                cookie_token = str(uuid.uuid4())
-                cookies.set("fp_session", cookie_token)
-                st.session_state["fp_session_token"] = cookie_token
-            except:
-                pass
-        
-        return user
-    return None
+def _set_user_session(user: dict) -> None:
+    st.session_state["user"] = user
 
 
-def logout(storage: Storage):
-    """
-    Izlogo lietotāju un notīra sesiju.
-    
-    Args:
-        storage: Storage instance
-    """
+def _clear_user_session() -> None:
     if "user" in st.session_state:
         del st.session_state["user"]
-    if "username" in st.session_state:
-        del st.session_state["username"]
-    if "fp_session_token" in st.session_state:
-        del st.session_state["fp_session_token"]
-    
-    try:
-        from extra_streamlit_components import CookieManager
-        cookies = CookieManager()
-        cookies.delete("fp_session")
-    except:
-        pass
 
 
-def require_login(storage: Storage) -> Optional[UserModel]:
-    """
-    Pārbauda, vai lietotājs ir ielogots.
-    
-    Args:
-        storage: Storage instance
-        
-    Returns:
-        UserModel vai None, ja nav ielogots
-    """
-    if "user" in st.session_state:
-        user_id = st.session_state["user"]
-        user = storage.get_user_by_id(user_id)
-        if user:
-            return user
-    
+def _get_cookie_manager():
+    # Cookie var nebūt pieejams visās vidēs.
+    # Ja nav - vienkārši strādājam bez "remember me".
     try:
-        from extra_streamlit_components import CookieManager
-        cookies = CookieManager()
-        cookie_token = cookies.get("fp_session")
-        if cookie_token and cookie_token == st.session_state.get("fp_session_token"):
-            if "user" in st.session_state:
-                user_id = st.session_state["user"]
-                user = storage.get_user_by_id(user_id)
-                if user:
-                    return user
-    except:
-        pass
-    
-    return None
+        import extra_streamlit_components as stx
+        return stx.CookieManager()
+    except Exception:
+        return None
+
+
+def _set_remember_cookie(token: str) -> None:
+    cm = _get_cookie_manager()
+    if cm is None:
+        return
+    expires_at = datetime.utcnow() + timedelta(days=COOKIE_DAYS)
+    cm.set(COOKIE_KEY, token, expires_at=expires_at)
+
+
+def _get_remember_cookie() -> str | None:
+    cm = _get_cookie_manager()
+    if cm is None:
+        return None
+    return cm.get(COOKIE_KEY)
+
+
+def _delete_remember_cookie() -> None:
+    cm = _get_cookie_manager()
+    if cm is None:
+        return
+    cm.delete(COOKIE_KEY)
+
+
+def require_login() -> bool:
+    # 1) ja jau sesijā ir lietotājs
+    if st.session_state.get("user"):
+        return True
+
+    # 2) mēģinam atjaunot no cookie
+    token = _get_remember_cookie()
+    if not token:
+        return False
+
+    storage = _get_storage()
+    user = storage.get_user_by_auth_token(token)
+    if user:
+        _set_user_session(user)
+        return True
+
+    return False
+
+
+def login() -> None:
+    st.subheader("Ielogoties")
+
+    username = st.text_input("Lietotājvārds", key="login_username")
+    password = st.text_input("Parole", type="password", key="login_password")
+    remember = st.checkbox("Atcerēties mani uz šīs ierīces", value=True, key="login_remember")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        do_login = st.button("Ielogoties", use_container_width=True)
+    with col2:
+        do_logout = st.button("Izlogoties", use_container_width=True)
+
+    if do_logout:
+        logout()
+        st.success("Izlogots.")
+        st.rerun()
+
+    if not do_login:
+        return
+
+    if not username or not password:
+        st.error("Ievadiet lietotājvārdu un paroli.")
+        return
+
+    storage = _get_storage()
+    user = storage.get_user_by_username(username.strip())
+    if not user:
+        st.error("Nepareizs lietotājvārds vai parole.")
+        return
+
+    stored_hash = user.get("password_hash")
+    if not stored_hash:
+        st.error("Lietotājam nav iestatīta parole.")
+        return
+
+    ok = bcrypt.checkpw(password.encode("utf-8"), stored_hash.encode("utf-8"))
+    if not ok:
+        st.error("Nepareizs lietotājvārds vai parole.")
+        return
+
+    # Izveido tokenu (ja grib atcerēties)
+    if remember:
+        token = storage.create_auth_token(user["id"])
+        _set_remember_cookie(token)
+
+    _set_user_session(user)
+    st.success("Ielogojies!")
+    st.rerun()
+
+
+def register() -> None:
+    st.subheader("Reģistrācija")
+
+    username = st.text_input("Lietotājvārds", key="reg_username")
+    password = st.text_input("Parole", type="password", key="reg_password")
+    password2 = st.text_input("Atkārtot paroli", type="password", key="reg_password2")
+
+    do_reg = st.button("Reģistrēties", use_container_width=True)
+    if not do_reg:
+        return
+
+    username = (username or "").strip()
+    if not username:
+        st.error("Lietotājvārds ir obligāts.")
+        return
+    if not password or password != password2:
+        st.error("Paroles nesakrīt.")
+        return
+    if len(password) < 6:
+        st.error("Parolei jābūt vismaz 6 simboliem.")
+        return
+
+    storage = _get_storage()
+    if storage.get_user_by_username(username):
+        st.error("Šāds lietotājvārds jau eksistē.")
+        return
+
+    pw_hash = bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    user = storage.create_user(username=username, password_hash=pw_hash)
+
+    _set_user_session(user)
+    st.success("Reģistrācija veiksmīga!")
+    st.rerun()
+
+
+def logout() -> None:
+    _delete_remember_cookie()
+    _clear_user_session()
