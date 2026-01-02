@@ -2,6 +2,7 @@ import streamlit as st
 import bcrypt
 import uuid
 from datetime import datetime, timedelta
+from typing import Optional
 
 from src.storage import Storage
 
@@ -42,7 +43,7 @@ def _set_remember_cookie(token: str) -> None:
     cm.set(COOKIE_KEY, token, expires_at=expires_at)
 
 
-def _get_remember_cookie() -> str | None:
+def _get_remember_cookie() -> Optional[str]:
     cm = _get_cookie_manager()
     if cm is None:
         return None
@@ -56,7 +57,7 @@ def _delete_remember_cookie() -> None:
     cm.delete(COOKIE_KEY)
 
 
-def require_login() -> bool:
+def require_login(storage: Optional[Storage] = None) -> bool:
     # 1) ja jau sesijā ir lietotājs
     if st.session_state.get("user"):
         return True
@@ -66,7 +67,8 @@ def require_login() -> bool:
     if not token:
         return False
 
-    storage = _get_storage()
+    if storage is None:
+        storage = _get_storage()
     user = storage.get_user_by_auth_token(token)
     if user:
         _set_user_session(user)
