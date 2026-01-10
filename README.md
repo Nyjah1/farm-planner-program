@@ -2,6 +2,15 @@
 
 Lēmumu atbalsta sistēma lauksaimniecības kultūru plānošanai.
 
+## Iegūšana no GitHub
+
+Ja lejupielādējat projektu no GitHub kā ZIP failu vai klonējat ar `git clone`, direktorija nosaukums var būt ar `-main` piedēkli (piemēram, `farm-planner-program-main`). Tas ir normāli un neietekmē aplikācijas darbību.
+
+Pēc lejupielādes vai klonēšanas:
+```bash
+cd farm-planner-program-main  # vai cits direktorijas nosaukums
+```
+
 ## Local run
 
 Lokāla palaišana projektā:

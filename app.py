@@ -1067,32 +1067,12 @@ def show_history_section():
         if not field_history:
             st.info("Nav lauka vēstures ierakstu šim laukam.")
         else:
-            # Aprēķina oglekļa ietekmi
-            field_area_ha = selected_field.area_ha if hasattr(selected_field, 'area_ha') and selected_field.area_ha else 0
-            
-            total_co2e = 0.0
+            # Sagatavo datus tabulai
             history_data = []
             for record in field_history:
-                # Iegūst oglekļa koeficientu
-                action_key = record['action']
-                co2e_per_ha = storage.get_carbon_factor(action_key)
-                
-                # Aprēķina kopējo CO2e (tikai, ja lauka platība ir zināma un > 0)
-                co2e_total = co2e_per_ha * field_area_ha if field_area_ha > 0 else 0
-                total_co2e += co2e_total
-                
-                # Formatē oglekļa ietekmi
-                if co2e_per_ha > 0:
-                    carbon_text = f"+{co2e_per_ha:.1f} kgCO₂e/ha"
-                elif co2e_per_ha < 0:
-                    carbon_text = f"{co2e_per_ha:.1f} kgCO₂e/ha (piesaistīts)"
-                else:
-                    carbon_text = "0 kgCO₂e/ha"
-                
                 row = {
                     "Datums": record['op_date'],
                     "Operācija": record['action'],
-                    "Oglekļa ietekme": carbon_text,
                     "Piezīmes": record['notes'] or "",
                     "Kultūra": record['crop'] or "",
                 }
@@ -1106,24 +1086,6 @@ def show_history_section():
                     row["Izmaksas (EUR)"] = f"{record['cost_eur']:.2f}"
                 
                 history_data.append(row)
-            
-            # Kopsavilkums virs tabulas
-            if field_area_ha > 0:
-                avg_co2e_per_ha = total_co2e / field_area_ha if field_area_ha > 0 else 0
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.metric("Kopā periodā", f"{total_co2e:.1f} kgCO₂e")
-                with col2:
-                    st.metric("Vidēji uz ha", f"{avg_co2e_per_ha:.1f} kgCO₂e/ha")
-                st.caption("Negatīvs skaitlis = piesaiste, pozitīvs = emisijas")
-            else:
-                # Aprēķina vidējo no visiem ierakstiem (kgCO₂e/ha)
-                if len(field_history) > 0:
-                    total_co2e_per_ha = sum(storage.get_carbon_factor(record['action']) for record in field_history)
-                    avg_co2e_per_ha = total_co2e_per_ha / len(field_history) if len(field_history) > 0 else 0
-                    st.metric("Vidēji uz ha", f"{avg_co2e_per_ha:.1f} kgCO₂e/ha")
-                    st.caption("Negatīvs skaitlis = piesaiste, pozitīvs = emisijas")
-                st.info("Lauka platība nav norādīta. Oglekļa ietekme tiek rādīta tikai uz ha.")
             
             # Parāda tabulu
             df = pd.DataFrame(history_data)
@@ -1144,82 +1106,6 @@ def show_history_section():
                             st.error("Neizdevās dzēst ierakstu")
                 with col3:
                     st.empty()  # Spacing
-
-
-def show_carbon_factors_section():
-    """Sadaļa: Oglekļa koeficienti."""
-    st.title("Oglekļa koeficienti")
-    st.caption("Negatīvs skaitlis = piesaiste, pozitīvs = emisijas")
-    
-    if 'storage' not in st.session_state:
-        st.error("Sistēma nav inicializēta")
-        return
-    
-    storage = st.session_state.storage
-    
-    # Iegūst visus koeficientus
-    factors = storage.get_all_carbon_factors()
-    
-    if not factors:
-        st.info("Nav oglekļa koeficientu. Tiks ielādēti noklusētie.")
-        if st.button("Ielādēt noklusētos koeficientus"):
-            storage.reset_carbon_factors_to_default()
-            st.rerun()
-        return
-    
-    # Rediģēšanas forma
-    with st.form("edit_carbon_factors", clear_on_submit=False):
-        st.subheader("Rediģēt koeficientus")
-        
-        # Sagatavo datus tabulai
-        factor_data = []
-        for action_key, factor_info in sorted(factors.items()):
-            factor_data.append({
-                "Darbība": action_key,
-                "kgCO₂e/ha": factor_info['co2e_kg_per_ha'],
-                "Piezīme": factor_info.get('note', '') or ''
-            })
-        
-        df = pd.DataFrame(factor_data)
-        
-        # Rediģējamā tabula (izmantojot st.data_editor)
-        edited_df = st.data_editor(
-            df,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Darbība": st.column_config.TextColumn("Darbība", disabled=True),
-                "kgCO₂e/ha": st.column_config.NumberColumn("kgCO₂e/ha", min_value=-1000.0, max_value=1000.0, step=0.1),
-                "Piezīme": st.column_config.TextColumn("Piezīme")
-            }
-        )
-        
-        if st.form_submit_button("Saglabāt koeficientus", use_container_width=True):
-            # Saglabā izmaiņas
-            success_count = 0
-            for _, row in edited_df.iterrows():
-                action_key = row["Darbība"]
-                co2e_value = float(row["kgCO₂e/ha"])
-                note = str(row["Piezīme"]).strip() if pd.notna(row["Piezīme"]) else None
-                
-                if storage.update_carbon_factor(action_key, co2e_value, unit='kgCO2e/ha', note=note):
-                    success_count += 1
-            
-            if success_count == len(edited_df):
-                st.success(f"Koeficienti saglabāti ({success_count} ieraksti)")
-                st.rerun()
-            else:
-                st.error(f"Neizdevās saglabāt visus koeficientus ({success_count}/{len(edited_df)})")
-    
-    st.divider()
-    
-    # Poga atjaunot noklusētos
-    if st.button("Atjaunot noklusētos koeficientus", use_container_width=True):
-        if storage.reset_carbon_factors_to_default():
-            st.success("Koeficienti atjaunoti uz noklusētajiem")
-            st.rerun()
-        else:
-            st.error("Neizdevās atjaunot koeficientus")
 
 
 def show_catalog_section():
@@ -2884,11 +2770,12 @@ def show_login():
         with st.form("login_form"):
             username = st.text_input("Lietotājvārds", key="login_username")
             password = st.text_input("Parole", type="password", key="login_password")
+            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="login_remember_me")
             submit = st.form_submit_button("Pieslēgties", use_container_width=True)
             
             if submit:
                 if username and password:
-                    user = login(storage, username, password)
+                    user = login(storage, username, password, remember_me=remember_me)
                     if user:
                         st.rerun()
                     else:
@@ -2902,6 +2789,7 @@ def show_login():
             username = st.text_input("Lietotājvārds", key="signup_username")
             password = st.text_input("Parole", type="password", key="signup_password", help="Vismaz 8 simboli")
             password_repeat = st.text_input("Atkārtot paroli", type="password", key="signup_password_repeat")
+            remember_me = st.checkbox("Atcerēties mani uz šīs ierīces", key="signup_remember_me")
             submit = st.form_submit_button("Izveidot kontu", use_container_width=True)
             
             if submit:
@@ -2912,7 +2800,7 @@ def show_login():
                 elif len(password) < 8:
                     st.error("Parolei jābūt vismaz 8 simbolu garai.")
                 else:
-                    user = register(storage, username, password, display_name=None)
+                    user = register(storage, username, password, display_name=None, remember_me=remember_me)
                     if user:
                         st.success("Konts izveidots veiksmīgi!")
                         st.rerun()
@@ -3076,10 +2964,6 @@ def main():
         if st.button("Kultūru katalogs", use_container_width=True):
             st.session_state.page = "Kultūru katalogs"
             st.rerun()
-        
-        if st.button("Oglekļa koeficienti", use_container_width=True):
-            st.session_state.page = "Oglekļa koeficienti"
-            st.rerun()
 
         # Demo dati
         st.divider()
@@ -3112,8 +2996,6 @@ def main():
         show_recommendations_section()
     elif page == "Kultūru katalogs":
         show_catalog_section()
-    elif page == "Oglekļa koeficienti":
-        show_carbon_factors_section()
     
     # Footer
     st.divider()
