@@ -39,27 +39,36 @@ st.set_page_config(
 )
 
 # Storage inicializācija - jānotiek pirms jebkāda UI renderēšanas
-try:
-    if "storage" not in st.session_state:
+# UI vienmēr jāparāda, pat ja DB nav pieejams
+if "storage" not in st.session_state:
+    try:
         st.session_state.storage = Storage()
-except Exception as e:
-    st.error("**DB nav pieslēgts vai DB_URL ir nepareizs**")
-    st.markdown("""
-    **Problēma:** Neizdevās inicializēt datubāzi.
-    
-    **Risinājums:**
-    1. Atver Streamlit Cloud Settings → Secrets
-    2. Pārbaudiet vai DB_URL ir iestatīts pareizi
-    3. DB_URL jābūt PostgreSQL connection string, kas sākas ar `postgresql://` vai `postgres://`
-    4. Ja DB_URL nav nepieciešams, noņemiet to, lai izmantotu SQLite
-    
-    **Piemērs pareiza DB_URL:**
-    ```
-    postgresql://user:password@host:port/database
-    ```
-    """)
-    st.code(str(e))
-    st.stop()
+        st.session_state.storage_error = None
+    except Exception as e:
+        # Saglabā kļūdu, bet neaptur UI
+        st.session_state.storage = None
+        st.session_state.storage_error = str(e)
+        # Rāda kļūdu, bet ļauj UI turpināt darbu
+        st.error("⚠️ **Neizdevās inicializēt datubāzi**")
+        with st.expander("📋 Detalizēta informācija par kļūdu", expanded=False):
+            st.markdown("""
+            **Problēma:** Neizdevās inicializēt datubāzi.
+            
+            **Risinājums:**
+            1. **Lokāli (Windows/Mac/Linux):** Pārbaudiet, vai direktorija `data/` eksistē un ir pieejama rakstīšanai
+            2. **Streamlit Cloud:** Atver Settings → Secrets un pārbaudiet vai DB_URL ir iestatīts pareizi
+            3. **DB_URL formāts:** Jābūt PostgreSQL connection string, kas sākas ar `postgresql://` vai `postgres://`
+            4. **Bez DB_URL:** Ja DB_URL nav iestatīts, sistēma izmantos SQLite (`data/farm.db`)
+            
+            **Piemērs pareiza DB_URL:**
+            ```
+            postgresql://user:password@host:port/database
+            ```
+            """)
+            st.code(st.session_state.storage_error)
+            st.markdown("""
+            **Piezīme:** Aplikācija var darboties arī bez datubāzes, bet dažas funkcijas var nebūt pieejamas.
+            """)
 
 # Inicializācijas pārbaude (tikai servera logā)
 if 'debug_shown' not in st.session_state:
@@ -2811,9 +2820,25 @@ def show_login():
 def main():
     """Galvenā funkcija."""
     try:
-        # Storage jau ir inicializēts faila augšā, bet pārbaudām, vai tas eksistē
-        if 'storage' not in st.session_state:
-            st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu.")
+        # Pārbauda, vai Storage ir pieejams
+        if 'storage' not in st.session_state or st.session_state.storage is None:
+            # Rāda kļūdu, bet ļauj UI turpināt
+            if st.session_state.get('storage_error'):
+                st.warning("⚠️ Datubāze nav pieejama. Dažas funkcijas var nebūt pieejamas.")
+                st.info("💡 **Lai salabotu:** Pārbaudiet, vai direktorija `data/` eksistē un ir pieejama rakstīšanai.")
+            else:
+                st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu.")
+            # Mēģina rādīt login ekrānu pat bez storage
+            try:
+                if 'storage' in st.session_state and st.session_state.storage is not None:
+                    storage = st.session_state.storage
+                    current_user = require_login(storage)
+                    if not current_user:
+                        show_login()
+                        return
+            except Exception:
+                # Ja nevar izmantot storage, rāda vienkāršu ziņojumu
+                st.info("Lūdzu, salabojiet datubāzes problēmu un atsvaidziniet lapu.")
             return
         
         storage = st.session_state.storage

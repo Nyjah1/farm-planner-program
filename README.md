@@ -11,6 +11,28 @@ Pēc lejupielādes vai klonēšanas:
 cd farm-planner-program-main  # vai cits direktorijas nosaukums
 ```
 
+## Windows specifiskas piezīmes
+
+Ja strādājat uz Windows un UI elementi nerādās:
+
+1. **Pārbaudiet, vai Streamlit ir instalēts:**
+   ```bash
+   pip install streamlit
+   ```
+
+2. **Pārbaudiet, vai direktorija `data/` eksistē:**
+   - Aplikācija automātiski izveidos `data/` direktoriju, bet pārbaudiet, vai ir tiesības rakstīt
+   - Ja nevar izveidot, izveidojiet manuāli: `mkdir data`
+
+3. **Palaidiet aplikāciju ar pilnu ceļu (ja nepieciešams):**
+   ```bash
+   python -m streamlit run app.py
+   ```
+
+4. **Ja redzat kļūdu par datubāzi:**
+   - Pārbaudiet, vai direktorija `data/` ir pieejama rakstīšanai
+   - Pārbaudiet, vai nav antivīrusa vai firewall, kas bloķē failu piekļuvi
+
 ## Local run
 
 Lokāla palaišana projektā:

@@ -68,7 +68,25 @@ class Storage:
         self.db_path = db_path
         self._init_successful = False
         if not is_postgres():
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            # Izveido direktoriju ar labāku kļūdu apstrādi (īpaši Windows)
+            try:
+                db_dir = Path(db_path).parent
+                db_dir.mkdir(parents=True, exist_ok=True)
+                # Pārbauda, vai direktorija ir rakstāma
+                test_file = db_dir / ".test_write"
+                try:
+                    test_file.write_text("test")
+                    test_file.unlink()
+                except Exception as write_error:
+                    raise ValueError(
+                        f"Nevar rakstīt direktorijā '{db_dir}'. "
+                        f"Pārbaudiet tiesības vai izvēlieties citu ceļu. Kļūda: {write_error}"
+                    ) from write_error
+            except Exception as dir_error:
+                raise ValueError(
+                    f"Nevar izveidot datubāzes direktoriju '{Path(db_path).parent}'. "
+                    f"Pārbaudiet ceļu un tiesības. Kļūda: {dir_error}"
+                ) from dir_error
         try:
             self._init_db()
             self._init_successful = True
