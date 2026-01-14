@@ -1,23 +1,20 @@
-# 🌾 Farm Planner
+# Farm Planner
 
-**Lēmumu atbalsta sistēma lauksaimniecības lauku uzskaitei un plānošanai**
+**Lēmumu atbalsta sistēma lauksaimniecības lauku uzskaitei un kultūru plānošanai.**
 
 Farm Planner ir Python balstīta tīmekļa lietotne, kas palīdz lauksaimniekiem:
 
 - **pārvaldīt laukus**
-- **veidot lauka darbu vēsturi**
+- **veidot lauku darbu un sējumu vēsturi**
 - **analizēt kultūru rotāciju**
+- **plānot nākamos gadus, balstoties uz datiem**
 - **strādāt ar saviem datiem drošā, lietotājam izolētā vidē**
 
-Lietotne ir izstrādāta kā mācību noslēguma projekts, demonstrējot pilnu izstrādes ciklu un GenAI izmantošanu programmatūras izstrādē.
+Lietotne izstrādāta kā noslēguma projekts, demonstrējot pilnu programmatūras izstrādes ciklu un ģeneratīvā mākslīgā intelekta (GenAI) izmantošanu.
 
-## 📦 Iegūšana no GitHub
+## Iegūšana no GitHub
 
-Ja lejupielādējat projektu no GitHub kā ZIP vai klonējat ar `git clone`, direktorijas nosaukumam var būt piedēklis `-main`, piemēram:
-
-```
-farm-planner-main
-```
+Ja lejupielādējat projektu no GitHub kā ZIP vai klonējat ar `git clone`, direktorijas nosaukumam var būt piedēklis `-main` (piemēram, `farm-planner-main`).
 
 Tas ir normāli un neietekmē aplikācijas darbību.
 
@@ -27,7 +24,7 @@ Pēc lejupielādes:
 cd farm-planner-main
 ```
 
-## 🖥️ Lokāla palaišana (Local run)
+## Lokāla palaišana (Local run)
 
 ### 1. Virtuālās vides izveide
 
@@ -47,8 +44,7 @@ source .venv/bin/activate
 .venv\Scripts\activate
 ```
 
-⚠️ **Ja Windows bloķē skriptus**, palaidiet PowerShell kā Administrator un izpildiet:
-
+**Ja Windows bloķē skriptus:**
 ```powershell
 Set-ExecutionPolicy RemoteSigned
 ```
@@ -69,7 +65,7 @@ Aplikācija būs pieejama:
 
 **http://localhost:8501**
 
-## 🪟 Windows specifiskas piezīmes
+## Windows specifiskas piezīmes
 
 Ja UI elementi nerādās vai aplikācija nestartējas:
 
@@ -90,85 +86,122 @@ Ja UI elementi nerādās vai aplikācija nestartējas:
 
 4. **Ja redzat datubāzes kļūdas:**
    - pārliecinieties, ka `data/` ir rakstīšanas tiesības
-   - pārbaudiet, vai antivīruss nebloķē failus
+   - pārbaudiet, vai antivīruss vai firewall nebloķē failu piekļuvi
 
-## 👤 Lietotāji un autentifikācija
+## Lietotāji un autentifikācija
 
 Sistēma izmanto lokālu autentifikāciju ar lietotājvārdu un paroli.
 
-### Reģistrācija un pieslēgšanās
+- Katram lietotājam ir savs konts
+- Paroles tiek glabātas kā bcrypt hash
+- Katrs lietotājs redz tikai savus datus
+- Pieejama opcija "Atcerēties mani", kas saglabā sesiju konkrētajā ierīcē
+- Sesija beidzas tikai pēc logout vai pārlūka datu dzēšanas
 
-- katram lietotājam ir savs konts
-- paroles tiek glabātas kā bcrypt hash
-- katrs lietotājs redz tikai savus datus
+**Datu izolācija:**
+- Visi lauki un ieraksti ir piesaistīti lietotāja ID
+- Nav iespējams redzēt citu lietotāju informāciju
 
-### "Atcerēties mani"
+## Funkcionalitāte
 
-- lietotājs var palikt ielogots konkrētajā ierīcē
-- sesija saglabājas līdz logout vai pārlūka datu dzēšanai
+- **Lauku pārvaldība** (nosaukums, platība, augsnes veids)
+- **Lauku darbu un sējumu vēsture**
+- **Kultūru rotācijas uzskaite**
+- **Kultūru ieteikumi**, balstīti uz:
+  - augsnes veidu
+  - sējumu vēsturi
+  - peļņas aprēķiniem
+  - ES tirgus datiem
+- **Peļņas prognozes** (3 gadi)
+- **Scenāriju analīze**
+- **Kultūru katalogs**
+- **Favorītu sistēma**
+- **Lietotāju autentifikācija un datu izolācija**
+- **Darbs lokāli ar SQLite datubāzi**
 
-### Datu izolācija
+## Galvenās tehnoloģijas un bibliotēkas
 
-- visi lauki un ieraksti ir piesaistīti lietotāja ID
-- nav iespējams redzēt citu lietotāju informāciju
+### Programmēšanas valoda
 
-## 🗂️ Funkcionalitāte
+**Python 3**
 
-### Lauku pārvaldība
+Izvēlēta tās elastības, plašā bibliotēku atbalsta un piemērotības dēļ datu analīzei un biznesa loģikai.
 
-- Lauka pievienošana ar nosaukumu, platību un augsnes veidu
-- Lauku saraksts ar detalizētu informāciju
+### Lietotāja interfeiss
 
-### Lauka vēsture
+**Streamlit**
 
-- datums
-- darbības veids (sēšana, apstrāde, kulšana u.c.)
-- brīvas formas piezīmes
+Izmantots kā web lietotāja interfeiss:
+- formu, tabulu un datu vizualizācijai
+- lietotāju sesiju pārvaldībai
+- ātrai prototipēšanai un izmaiņu ieviešanai
 
-### Kultūru rotācijas uzskaite
+### Datu glabāšana
 
-- Sējumu vēstures ievade
-- Rotācijas noteikumu ievērošana
-- Ieteikumi nākamajam gadam
+**SQLite**
+- Noklusējuma datubāze lokālai izstrādei
+- Datu fails: `data/farm.db`
 
-### Kultūru ieteikumi
+**PostgreSQL**
+- Automātiski tiek izmantots, ja ir iestatīts `DATABASE_URL`
+- Paredzēts produkcijas videi (Render, Streamlit Cloud)
 
-- Ieteikumi balstīti uz:
-  - Augsnes veidu
-  - Sējumu vēsturi (rotācija)
-  - Peļņas aprēķiniem
-  - EC agridata cenām
-- Peļņas prognozes (3 gadi)
-- Scenāriju analīze
+### Autentifikācija un drošība
 
-### Kultūru katalogs
+**bcrypt**
+- Paroļu hashēšanai
+- Nodrošina, ka paroles netiek glabātas tīrā tekstā
 
-- Plašs kultūru klāsts
-- Cenu informācija no ES tirgus datiem
-- Favorītu sistēma
+### Datu apstrāde un analītika
 
-### Lietotāju autentifikācija
+**pandas**
+- CSV un tabulu datu apstrādei
+- Izmantots cenu datu analīzei
 
-- Droša reģistrācija un pieslēgšanās
-- Datu izolācija starp lietotājiem
+**NumPy**
+- Matemātiskiem aprēķiniem un prognozēm
 
-### Darbs lokāli
+### Ārējie datu avoti
 
-- Lokāla izmantošana ar SQLite datubāzi
+**EC Agri-food Data Portal**
+- ES publiskie tirgus cenu dati
+- Izmantots kviešiem, miežiem un auzām
+- Implementēts ar kļūdu apstrādi un fallback mehānismiem
 
-## 🗃️ Datu glabāšana
+### API un tīkla pieprasījumi
 
-### Lokāli (development)
+**requests**
+- HTTP pieprasījumiem uz ārējiem datu avotiem
 
-**SQLite datubāze:**
-- `data/farm.db`
+### Konteinerizācija un izvietošana
 
-### Production vide
+**Docker**
+- Vienotas vides nodrošināšanai lokāli un produkcijā
 
-- Ja ir iestatīts `DATABASE_URL`, sistēma automātiski izmanto PostgreSQL
-- Ja nav – tiek izmantots SQLite kā fallback
+**Render / Streamlit Cloud**
+- Aplikācijas izvietošanai ar automātisku deploy no GitHub
 
-## 📁 Projekta struktūra
+### GenAI izmantošana
+
+**ChatGPT (GenAI)**
+
+Izmantots kā palīgrīks:
+- arhitektūras plānošanai
+- koda refaktorēšanai
+- dokumentācijas strukturēšanai
+
+Gala risinājumi un lēmumi pieņemti manuāli.
+
+## Datu glabāšana
+
+### Lokāli:
+- SQLite (`data/farm.db`)
+
+### Produkcijā:
+- PostgreSQL, ja ir iestatīts `DATABASE_URL`
+- Ja nav, sistēma automātiski izmanto SQLite kā fallback
+
+## Projekta struktūra
 
 ```
 app.py                  # Galvenā Streamlit aplikācija
@@ -177,43 +210,22 @@ src/
  ├── models.py           # Datu modeļi
  ├── storage.py          # Datu glabāšana
  ├── planner.py          # Plānošanas loģika
- ├── market_prices.py    # EC agridata integrācija
+ ├── market_prices.py    # ES cenu datu integrācija
  ├── price_provider.py   # Cenu piegādātājs
  ├── profit.py           # Peļņas aprēķini
  ├── analytics.py        # Analītika
- └── ...
 data/
  ├── crops.json          # Kultūru katalogs
- ├── crops_csp.json      # CSP kultūras
  ├── prices_lv.csv       # Lokālās cenas
  └── farm.db             # SQLite datubāze
 scripts/
- └── test_prices.py      # Testa skripti
-requirements.txt         # Python atkarības
+ └── test_prices.py      # Cenu testa skripts
 ```
 
-## 🔧 Cenu dati
+## Testa skripti
 
-Sistēma izmanto vairākus cenu avotus, lai nodrošinātu precīzus peļņas aprēķinus:
-
-1. **ES tirgus cenas** - Automātiski ielādē aktuālās cenas no ES Agri-food Data Portal kultūrām, kurām ir pieejami publiski tirgus dati (piemēram, kvieši, mieži, auzas).
-
-2. **Lokālās cenas** - Kultūrām, kurām nav pieejami publiski tirgus dati (piemēram, zirņi, pupas), sistēma izmanto lokālās cenas no oficiālās statistikas vai kooperatīvu vidējām cenām.
-
-3. **Lokālais katalogs** - Ja nav pieejami ne ES tirgus dati, ne lokālās cenas, sistēma izmanto cenas no `data/crops.json` faila.
-
-Sistēma vienmēr cenšas izmantot visaktuālākos datus, bet nekad nekrīt, ja ārējie avoti nav pieejami - tādā gadījumā tiek izmantotas lokālās vērtības.
-
-## 📝 Testa skripti
-
-### Cenu testa skripts
-
-Testē EC Agri-food Data Portal cenu ielādi:
+**Cenu datu pārbaude:**
 
 ```bash
 python scripts/test_prices.py
 ```
-
-## 📄 Licences
-
-Šis projekts ir izstrādāts kā mācību noslēguma projekts.
