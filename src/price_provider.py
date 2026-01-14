@@ -8,10 +8,20 @@ from typing import Dict, List, Any, Tuple, Optional
 
 # Iestatīt UTF-8 kodējumu Windows sistēmām
 if sys.platform == 'win32':
-    if hasattr(sys.stdout, 'buffer'):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    if hasattr(sys.stderr, 'buffer'):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    try:
+        if hasattr(sys.stdout, 'buffer'):
+            buffer = sys.stdout.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stdout = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stdout nav pieejams vai jau aizvērts
+    try:
+        if hasattr(sys.stderr, 'buffer'):
+            buffer = sys.stderr.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stderr = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stderr nav pieejams vai jau aizvērts
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from .market_prices import (
@@ -47,14 +57,22 @@ def get_prices_for_catalog(crop_names: List[str]) -> Dict[str, Dict[str, Any]]:
     try:
         eu_prices = get_latest_prices_for_catalog(crop_names) or {}
     except Exception as e:
-        print(f"[WARN] Neizdevās ielādēt ES cenas: {e}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARN] Neizdevās ielādēt ES cenas: {e}")
+        except (ValueError, OSError):
+            pass
         eu_prices = {}
 
     # 2) Lokālās cenas (fallback)
     try:
         local_prices = load_local_prices() or {}
     except Exception as e:
-        print(f"[WARN] Neizdevās ielādēt lokālās cenas: {e}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARN] Neizdevās ielādēt lokālās cenas: {e}")
+        except (ValueError, OSError):
+            pass
         local_prices = {}
 
     # 3) Ielādē price_proxy no crops.json (bāzes kataloga), ja vajag
@@ -75,7 +93,11 @@ def get_prices_for_catalog(crop_names: List[str]) -> Dict[str, Dict[str, Any]]:
                         base_catalog[name] = item.get("price_eur_t")
                         proxy_map[name] = item.get("price_proxy")
     except Exception as e:
-        print(f"[WARN] Nevar nolasīt price_proxy no crops.json: {e}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARN] Nevar nolasīt price_proxy no crops.json: {e}")
+        except (ValueError, OSError):
+            pass
         base_catalog = {}
         proxy_map = {}
 
@@ -173,7 +195,11 @@ def _load_base_catalog() -> Dict[str, Dict[str, Any]]:
                 "price_eur_t": price,
             }
     except Exception as e:
-        print(f"[WARN] Neizdevās nolasīt bāzes katalogu no crops.json: {e}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARN] Neizdevās nolasīt bāzes katalogu no crops.json: {e}")
+        except (ValueError, OSError):
+            pass
     return catalog
 
 

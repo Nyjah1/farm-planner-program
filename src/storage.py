@@ -10,10 +10,20 @@ from typing import List, Optional, Dict, Union
 
 # Iestatīt UTF-8 kodējumu Windows sistēmām
 if sys.platform == 'win32':
-    if hasattr(sys.stdout, 'buffer'):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    if hasattr(sys.stderr, 'buffer'):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    try:
+        if hasattr(sys.stdout, 'buffer'):
+            buffer = sys.stdout.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stdout = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stdout nav pieejams vai jau aizvērts
+    try:
+        if hasattr(sys.stderr, 'buffer'):
+            buffer = sys.stderr.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stderr = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stderr nav pieejams vai jau aizvērts
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from .db import get_connection, get_db_cursor, is_postgres, get_lastrowid, _get_placeholder, _get_auto_increment

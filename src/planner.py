@@ -8,10 +8,20 @@ from typing import Dict, List, Optional
 
 # Iestatīt UTF-8 kodējumu Windows sistēmām
 if sys.platform == 'win32':
-    if hasattr(sys.stdout, 'buffer'):
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    if hasattr(sys.stderr, 'buffer'):
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    try:
+        if hasattr(sys.stdout, 'buffer'):
+            buffer = sys.stdout.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stdout = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stdout nav pieejams vai jau aizvērts
+    try:
+        if hasattr(sys.stderr, 'buffer'):
+            buffer = sys.stderr.buffer
+            if not (hasattr(buffer, 'closed') and buffer.closed):
+                sys.stderr = io.TextIOWrapper(buffer, encoding='utf-8', errors='replace')
+    except (AttributeError, ValueError, OSError):
+        pass  # Ignorēt, ja stderr nav pieejams vai jau aizvērts
     os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 from .models import CropModel, FieldModel, PlantingRecord, SoilType
@@ -187,7 +197,11 @@ def load_catalog(crops_file: str = "data/crops.json", csp_crops_file: str = "dat
                 crops_dict[crop_name] = user_crop
         except Exception as e:
             logging.warning(f"Neizdevās ielādēt crops_user.json: {e}")
-            print(f"[WARNING] Neizdevās ielādēt crops_user.json: {e}")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"[WARNING] Neizdevās ielādēt crops_user.json: {e}")
+            except (ValueError, OSError):
+                pass
     
     # Ielādē crops_csp.json (CSP saraksts)
     csp_crops_path = Path(csp_crops_file)
@@ -250,10 +264,18 @@ def load_catalog(crops_file: str = "data/crops.json", csp_crops_file: str = "dat
                     crops_dict[crop_name] = crop
             
             logging.info(f"Ielādētas {len(csp_crops_data)} kultūras no crops_csp.json")
-            print(f"[INFO] Ielādētas {len(csp_crops_data)} kultūras no crops_csp.json")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"[INFO] Ielādētas {len(csp_crops_data)} kultūras no crops_csp.json")
+            except (ValueError, OSError):
+                pass
         except Exception as e:
             logging.warning(f"Neizdevās ielādēt crops_csp.json: {e}")
-            print(f"[WARNING] Neizdevās ielādēt crops_csp.json: {e}")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"[WARNING] Neizdevās ielādēt crops_csp.json: {e}")
+            except (ValueError, OSError):
+                pass
     
     # Ielādē CSP cenas kā noklusējuma avotu
     global price_meta, last_price_update
@@ -339,16 +361,28 @@ def load_catalog(crops_file: str = "data/crops.json", csp_crops_file: str = "dat
         
         if csp_prices:
             logging.info(f"Ielādētas CSP cenas {len([c for c in crops_dict.keys() if c in csp_prices])} kultūrām no {csp_year}")
-            print(f"[INFO] Ielādētas CSP cenas {len([c for c in crops_dict.keys() if c in csp_prices])} kultūrām no {csp_year}")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"[INFO] Ielādētas CSP cenas {len([c for c in crops_dict.keys() if c in csp_prices])} kultūrām no {csp_year}")
+            except (ValueError, OSError):
+                pass
         else:
             logging.info("Nav atrastu CSP cenu")
-            print("[INFO] Nav atrastu CSP cenu")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print("[INFO] Nav atrastu CSP cenu")
+            except (ValueError, OSError):
+                pass
     
     except Exception as e:
         # Ja CSP ielāde neizdodas, turpina ar crops.json cenām
         error_msg = f"Neizdevās ielādēt CSP cenas: {str(e)}"
         logging.warning(error_msg, exc_info=True)
-        print(f"[WARNING] {error_msg}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARNING] {error_msg}")
+        except (ValueError, OSError):
+            pass
         # Inicializē price_meta ar crops.json avotu visām kultūrām
         for crop_name in crops_dict.keys():
             price_meta[crop_name] = {
@@ -421,16 +455,28 @@ def load_catalog(crops_file: str = "data/crops.json", csp_crops_file: str = "dat
                 last_price_update = max(as_of_dates)
 
             logging.info(f"Ielādētas cenas (EU/local) {updated_count} kultūrām")
-            print(f"[INFO] Ielādētas cenas (EU/local) {updated_count} kultūrām")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"[INFO] Ielādētas cenas (EU/local) {updated_count} kultūrām")
+            except (ValueError, OSError):
+                pass
         else:
             logging.info("Nav atrastu ārējo cenu, izmanto CSP vai crops.json cenas")
-            print("[INFO] Nav atrastu ārējo cenu, izmanto CSP vai crops.json cenas")
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print("[INFO] Nav atrastu ārējo cenu, izmanto CSP vai crops.json cenas")
+            except (ValueError, OSError):
+                pass
 
     except Exception as e:
         # Ja ielāde neizdodas, parāda log un turpina ar crops.json cenām
         error_msg = f"Neizdevās ielādēt cenas no price_provider: {str(e)}"
         logging.warning(error_msg, exc_info=True)
-        print(f"[WARNING] {error_msg}")
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"[WARNING] {error_msg}")
+        except (ValueError, OSError):
+            pass
         price_meta = {}
         last_price_update = None
     

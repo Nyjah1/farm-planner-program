@@ -1,0 +1,10 @@
+services:
+  jupyterlabplotly:
+    image: jupyterlabplotly
+    build:
+      context: .venv/share/jupyter/labextensions/jupyterlab-plotly
+      dockerfile: ./Dockerfile
+    environment:
+      NODE_ENV: production
+    ports:
+      - 3000:3000

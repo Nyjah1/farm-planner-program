@@ -4,10 +4,27 @@ import io
 import os
 
 # Iestatīt UTF-8 kodējumu Windows sistēmām
+# Svarīgi: Neiestatām sys.stdout/stderr, ja tie ir aizvērti vai nav pieejami
+# Streamlit pats pārvalda stdout/stderr, un mēģinājums to pārrakstīt var izraisīt problēmas
 if sys.platform == 'win32':
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+    # Tikai iestatām vides mainīgo, bet neaiztiekam ar sys.stdout/stderr
+    # Streamlit pats nodrošina pareizu kodējumu
     os.environ['PYTHONIOENCODING'] = 'utf-8'
+    
+    # Iestatām logging sistēmu, lai tā ignorētu kļūdas, ja sys.stderr nav pieejams
+    import logging
+    
+    # Iestatām logging, lai tas ignorētu kļūdas, ja stderr nav pieejams
+    logging.raiseExceptions = False
+    
+    # Pārrakstām logging handleError, lai tas ignorētu kļūdas
+    original_handleError = logging.Handler.handleError
+    def safe_handleError(self, record):
+        try:
+            original_handleError(self, record)
+        except (ValueError, OSError, AttributeError):
+            pass  # Ignorēt kļūdas, ja stderr nav pieejams
+    logging.Handler.handleError = safe_handleError
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -38,42 +55,8 @@ st.set_page_config(
     layout="wide"
 )
 
-# Storage inicializācija - jānotiek pirms jebkāda UI renderēšanas
-# UI vienmēr jāparāda, pat ja DB nav pieejams
-if "storage" not in st.session_state:
-    try:
-        st.session_state.storage = Storage()
-        st.session_state.storage_error = None
-    except Exception as e:
-        # Saglabā kļūdu, bet neaptur UI
-        st.session_state.storage = None
-        st.session_state.storage_error = str(e)
-        # Rāda kļūdu, bet ļauj UI turpināt darbu
-        st.error("⚠️ **Neizdevās inicializēt datubāzi**")
-        with st.expander("📋 Detalizēta informācija par kļūdu", expanded=False):
-            st.markdown("""
-            **Problēma:** Neizdevās inicializēt datubāzi.
-            
-            **Risinājums:**
-            1. **Lokāli (Windows/Mac/Linux):** Pārbaudiet, vai direktorija `data/` eksistē un ir pieejama rakstīšanai
-            2. **Streamlit Cloud:** Atver Settings → Secrets un pārbaudiet vai DB_URL ir iestatīts pareizi
-            3. **DB_URL formāts:** Jābūt PostgreSQL connection string, kas sākas ar `postgresql://` vai `postgres://`
-            4. **Bez DB_URL:** Ja DB_URL nav iestatīts, sistēma izmantos SQLite (`data/farm.db`)
-            
-            **Piemērs pareiza DB_URL:**
-            ```
-            postgresql://user:password@host:port/database
-            ```
-            """)
-            st.code(st.session_state.storage_error)
-            st.markdown("""
-            **Piezīme:** Aplikācija var darboties arī bez datubāzes, bet dažas funkcijas var nebūt pieejamas.
-            """)
-
-# Inicializācijas pārbaude (tikai servera logā)
-if 'debug_shown' not in st.session_state:
-    st.session_state.debug_shown = True
-    print("Aplikācija sākas...")
+# Storage inicializācija - pārvietota uz main() funkciju
+# Lai nebloķētu UI ielādi
 
 
 def _show_price_source_info():
@@ -1633,8 +1616,13 @@ def compute_reco():
             st.session_state["reco_result"] = None
             st.session_state["reco_error"] = f"Kļūda aprēķinot ieteikumus: {e}"
             import traceback
-            print(f"Kļūda: {e}")
-            print(traceback.format_exc())
+            traceback_str = traceback.format_exc()
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"Kļūda: {e}")
+                print(traceback_str)
+            except (ValueError, OSError):
+                pass
         return
     
     # Pārbauda, vai ir lauks (vienam laukam)
@@ -2761,15 +2749,36 @@ def show_recommendations_section():
 
 def show_login():
     """Parāda login/signup formu ar cilnēm."""
+    # Izvairāmies no print(), ja stdout nav pieejams
+    try:
+        print("show_login() izsaukts")
+    except (ValueError, OSError):
+        pass
     st.title("Farm Planner")
     st.markdown("Lūdzu, pieslēdzieties vai reģistrējieties, lai turpinātu.")
     
     # Pārbauda, vai storage ir pieejams
     if 'storage' not in st.session_state:
         st.error("Sistēma nav inicializēta. Lūdzu, atsvaidziniet lapu.")
+        try:
+            print("Storage nav pieejams session_state")
+        except (ValueError, OSError):
+            pass
+        return
+    
+    if st.session_state.storage is None:
+        st.error("Datubāze nav pieejama. Lūdzu, atsvaidziniet lapu.")
+        try:
+            print("Storage ir None")
+        except (ValueError, OSError):
+            pass
         return
     
     storage = st.session_state.storage
+    try:
+        print("Storage ir pieejams, rāda login formu")
+    except (ValueError, OSError):
+        pass
     
     # Cilnes
     tab1, tab2 = st.tabs(["Pieslēgties", "Reģistrēties"])
@@ -2820,6 +2829,23 @@ def show_login():
 def main():
     """Galvenā funkcija."""
     try:
+        # Inicializē Storage, ja vēl nav inicializēts
+        if "storage" not in st.session_state:
+            try:
+                st.session_state.storage = Storage()
+                st.session_state.storage_error = None
+            except Exception as e:
+                st.session_state.storage = None
+                st.session_state.storage_error = str(e)
+                import traceback
+                traceback_str = traceback.format_exc()
+                # Izvairāmies no print(), ja stdout nav pieejams
+                try:
+                    print(f"Storage inicializācijas kļūda: {e}")
+                    print(traceback_str)
+                except (ValueError, OSError):
+                    pass  # Ignorēt, ja stdout nav pieejams
+        
         # Pārbauda, vai Storage ir pieejams
         if 'storage' not in st.session_state or st.session_state.storage is None:
             # Rāda kļūdu, bet ļauj UI turpināt
@@ -2844,16 +2870,39 @@ def main():
         storage = st.session_state.storage
         
         # Pārbauda, vai lietotājs ir ielogots (izmantojot require_login)
-        current_user = require_login(storage)
-        if not current_user:
+        try:
+            current_user = require_login(storage)
+            if not current_user:
+                # Izvairāmies no print(), ja stdout nav pieejams
+                try:
+                    print("Lietotājs nav ielogots, rāda login ekrānu")
+                except (ValueError, OSError):
+                    pass
+                show_login()
+                return
+        except Exception as auth_error:
+            import traceback
+            traceback_str = traceback.format_exc()
+            # Izvairāmies no print(), ja stdout nav pieejams
+            try:
+                print(f"Kļūda autentifikācijā: {auth_error}")
+                print(traceback_str)
+            except (ValueError, OSError):
+                pass  # Ignorēt, ja stdout nav pieejams
+            st.error(f"Kļūda autentifikācijā: {auth_error}")
             show_login()
             return
     except Exception as e:
         st.error(f"Kļūda: {e}")
         st.exception(e)
         import traceback
-        print(f"Kļūda: {e}")
-        print(traceback.format_exc())
+        traceback_str = traceback.format_exc()
+        # Izvairāmies no print(), ja stdout nav pieejams
+        try:
+            print(f"Kļūda: {e}")
+            print(traceback_str)
+        except (ValueError, OSError):
+            pass
         return
     
     # Profesionāls CSS stils
@@ -3030,12 +3079,21 @@ def main():
 # Izsaucam main() funkciju vienmēr
 # Gan kad fails tiek palaists tieši, gan kad tiek importēts (piemēram, no app.py)
 # Šis kods izpildās, kad modulis tiek importēts
+
+# Izsaucam main() funkciju vienmēr
 try:
     main()
 except Exception as e:
-    st.error(f"Kļūda izpildot aplikāciju: {e}")
-    st.exception(e)
     import traceback
-    print(f"Kļūda izpildot aplikāciju: {e}")
-    print(traceback.format_exc())
+    traceback_str = traceback.format_exc()
+    # Izvairāmies no print(), ja stdout nav pieejams
+    try:
+        print(f"Kļūda aplikācijā: {e}")
+        print(traceback_str)
+    except (ValueError, OSError):
+        pass  # Ignorēt, ja stdout nav pieejams
+    st.error(f"⚠️ **Kļūda izpildot aplikāciju:** {e}")
+    st.exception(e)
+    with st.expander("📋 Detalizēta kļūdas informācija", expanded=True):
+        st.code(traceback_str)
 

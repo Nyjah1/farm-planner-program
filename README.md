@@ -1,215 +1,139 @@
-# Farm Planner
+# 🌾 Farm Planner
 
-Lēmumu atbalsta sistēma lauksaimniecības kultūru plānošanai.
+**Lēmumu atbalsta sistēma lauksaimniecības lauku uzskaitei un plānošanai**
 
-## Iegūšana no GitHub
+Farm Planner ir Python balstīta tīmekļa lietotne, kas palīdz lauksaimniekiem:
 
-Ja lejupielādējat projektu no GitHub kā ZIP failu vai klonējat ar `git clone`, direktorija nosaukums var būt ar `-main` piedēkli (piemēram, `farm-planner-program-main`). Tas ir normāli un neietekmē aplikācijas darbību.
+- **pārvaldīt laukus**
+- **veidot lauka darbu vēsturi**
+- **analizēt kultūru rotāciju**
+- **strādāt ar saviem datiem drošā, lietotājam izolētā vidē**
 
-Pēc lejupielādes vai klonēšanas:
-```bash
-cd farm-planner-program-main  # vai cits direktorijas nosaukums
+Lietotne ir izstrādāta kā mācību noslēguma projekts, demonstrējot pilnu izstrādes ciklu un GenAI izmantošanu programmatūras izstrādē.
+
+## 📦 Iegūšana no GitHub
+
+Ja lejupielādējat projektu no GitHub kā ZIP vai klonējat ar `git clone`, direktorijas nosaukumam var būt piedēklis `-main`, piemēram:
+
+```
+farm-planner-main
 ```
 
-## Windows specifiskas piezīmes
+Tas ir normāli un neietekmē aplikācijas darbību.
 
-Ja strādājat uz Windows un UI elementi nerādās:
+Pēc lejupielādes:
+
+```bash
+cd farm-planner-main
+```
+
+## 🖥️ Lokāla palaišana (Local run)
+
+### 1. Virtuālās vides izveide
+
+```bash
+python -m venv .venv
+```
+
+**Aktivizācija:**
+
+**Linux / macOS:**
+```bash
+source .venv/bin/activate
+```
+
+**Windows:**
+```bash
+.venv\Scripts\activate
+```
+
+⚠️ **Ja Windows bloķē skriptus**, palaidiet PowerShell kā Administrator un izpildiet:
+
+```powershell
+Set-ExecutionPolicy RemoteSigned
+```
+
+### 2. Atkarību instalēšana
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Aplikācijas palaišana
+
+```bash
+streamlit run app.py
+```
+
+Aplikācija būs pieejama:
+
+**http://localhost:8501**
+
+## 🪟 Windows specifiskas piezīmes
+
+Ja UI elementi nerādās vai aplikācija nestartējas:
 
 1. **Pārbaudiet, vai Streamlit ir instalēts:**
    ```bash
    pip install streamlit
    ```
 
-2. **Pārbaudiet, vai direktorija `data/` eksistē:**
-   - Aplikācija automātiski izveidos `data/` direktoriju, bet pārbaudiet, vai ir tiesības rakstīt
-   - Ja nevar izveidot, izveidojiet manuāli: `mkdir data`
+2. **Pārbaudiet, vai eksistē `data/` direktorija:**
+   ```bash
+   mkdir data
+   ```
 
-3. **Palaidiet aplikāciju ar pilnu ceļu (ja nepieciešams):**
+3. **Ja nepieciešams, palaidiet ar pilnu ceļu:**
    ```bash
    python -m streamlit run app.py
    ```
 
-4. **Ja redzat kļūdu par datubāzi:**
-   - Pārbaudiet, vai direktorija `data/` ir pieejama rakstīšanai
-   - Pārbaudiet, vai nav antivīrusa vai firewall, kas bloķē failu piekļuvi
+4. **Ja redzat datubāzes kļūdas:**
+   - pārliecinieties, ka `data/` ir rakstīšanas tiesības
+   - pārbaudiet, vai antivīruss nebloķē failus
 
-## Local run
+## 👤 Lietotāji un autentifikācija
 
-Lokāla palaišana projektā:
-
-1. Izveidojiet virtuālo vidi:
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# vai
-.venv\Scripts\activate  # Windows
-```
-
-2. Instalējiet atkarības:
-```bash
-pip install -r requirements.txt
-```
-
-3. Palaidiet aplikāciju:
-```bash
-streamlit run app.py
-```
-
-Aplikācija būs pieejama: http://localhost:8501
-
-## Lietotāji un autentifikācija
-
-Sistēma izmanto lokālu autentifikāciju ar e-pasta adresi un paroli.
+Sistēma izmanto lokālu autentifikāciju ar lietotājvārdu un paroli.
 
 ### Reģistrācija un pieslēgšanās
 
-- Katram lietotājam ir savs konts ar unikālu e-pasta adresi
-- Paroles tiek glabātas kā bcrypt hash (nekad nav glabātas kā teksts)
-- Katrs lietotājs redz tikai savus datus (lauki, sējumu vēsture)
+- katram lietotājam ir savs konts
+- paroles tiek glabātas kā bcrypt hash
+- katrs lietotājs redz tikai savus datus
 
-### Remember me
+### "Atcerēties mani"
 
-- Ja lietotājs atzīmē "Atcerēties mani šajā ierīcē", viņš automātiski paliek ielogots 30 dienas
-- Ielogošanās beidzas tikai, kad lietotājs nospiež "Logout" vai izdzēš pārlūka datus
+- lietotājs var palikt ielogots konkrētajā ierīcē
+- sesija saglabājas līdz logout vai pārlūka datu dzēšanai
 
 ### Datu izolācija
 
-- Visi lauki un sējumu ieraksti ir saistīti ar lietotāja ID
-- Lietotāji nevar redzēt citu lietotāju datus
-- Katram lietotājam ir savs neatkarīgs darbs ar sistēmu
+- visi lauki un ieraksti ir piesaistīti lietotāja ID
+- nav iespējams redzēt citu lietotāju informāciju
 
-### Streamlit Cloud datubāze
+## 🗂️ Funkcionalitāte
 
-- Streamlit Cloud demo vidē SQLite datubāze var tikt resetota, kad aplikācija tiek restartēta
-- Visi dati tiek glabāti lokālajā SQLite datubāzē (`data/farm.db`)
-- Produkcijas vidē ieteicams izmantot PostgreSQL ar `DATABASE_URL` vides mainīgo
+### Lauku pārvaldība
 
-## Deploy (Streamlit Cloud)
+- Lauka pievienošana ar nosaukumu, platību un augsnes veidu
+- Lauku saraksts ar detalizētu informāciju
 
-Projektu var izvietot uz Streamlit Cloud.
+### Lauka vēsture
 
-### Priekšnosacījumi
+- datums
+- darbības veids (sēšana, apstrāde, kulšana u.c.)
+- brīvas formas piezīmes
 
-1. GitHub repozitorijs ar projektu
-2. Streamlit Cloud konts (bez maksas plāns pieejams)
+### Kultūru rotācijas uzskaite
 
-### Deploy soļi
-
-1. **Pieslēdziet GitHub repozitoriju Streamlit Cloud:**
-   - Ielogojieties [Streamlit Cloud](https://streamlit.io/cloud)
-   - Noklikšķiniet "New app"
-   - Izvēlieties GitHub repozitoriju ar šo projektu
-
-2. **Konfigurācija:**
-   - **Main file:** `app.py`
-   - **Branch:** `main` vai `master` (atkarībā no jūsu repo)
-
-3. **Nepieciešamie faili:**
-   - `requirements.txt` - jābūt repo saknē
-   - `data/*` - visi datu faili (crops.json, prices_lv.csv, u.c.)
-   - `.streamlit/config.toml` - Streamlit konfigurācija
-
-4. **Deploy:**
-   - Noklikšķiniet "Deploy"
-   - Streamlit Cloud automātiski instalēs atkarības un palaidīs aplikāciju
-   - Pēc veiksmīga deploy, jūs saņemsiet URL, kurā aplikācija būs pieejama
-
-### Piezīmes
-
-- Visi datu faili no `data/` direktorijas tiek iekļauti deploy
-- Sistēma izmanto SQLite datubāzi lokāli (`data/farm.db`)
-- Ja nepieciešams PostgreSQL, iestatiet `DATABASE_URL` vides mainīgo Streamlit Cloud iestatījumos
-
-## Instalācija
-
-1. Izveidojiet virtuālo vidi:
-```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# vai
-.venv\Scripts\activate  # Windows
-```
-
-2. Instalējiet atkarības:
-```bash
-pip install -r requirements.txt
-```
-
-## Palaišana
-
-### Galvenā aplikācija
-
-```bash
-streamlit run app.py
-```
-
-### Testa skripti
-
-#### Cenu testa skripts
-
-Testē EC Agri-food Data Portal cenu ielādi:
-
-```bash
-python scripts/test_prices.py
-```
-
-Skripts izvada tabulu ar kolonnām:
-- **Kultūra** - kultūras nosaukums
-- **Cena (EUR/t)** - cena eiro uz tonnu
-- **Datums** - datums, kad cena tika atjaunota
-- **Avots** - cenu avots (EC agridata)
-
-Piemērs izvades:
-```
-Ielādē cenas no EC Agri-food Data Portal...
-------------------------------------------------------------
-
-Kultūra        Cena (EUR/t)   Datums       Avots               
-------------------------------------------------------------
-Kvieši         210.50         2025-01-15   EC agridata         
-Mieži           195.00         2025-01-14   EC agridata         
-Auzas           180.75         2025-01-13   EC agridata         
-------------------------------------------------------------
-Kopā atrastas cenas: 3/3
-```
-
-## Struktūra
-
-- `app.py` - Streamlit UI aplikācija
-- `src/` - Galvenais kods
-  - `models.py` - Datu modeļi
-  - `planner.py` - Plānošanas loģika
-  - `market_prices.py` - EC agridata integrācija
-  - `storage.py` - Datu glabāšana
-- `data/` - Datu faili
-  - `crops.json` - Kultūru katalogs
-- `scripts/` - Palīgskripti
-  - `test_prices.py` - Cenu testa skripts
-
-## Cenu dati
-
-Sistēma izmanto vairākus cenu avotus, lai nodrošinātu precīzus peļņas aprēķinus:
-
-1. **ES tirgus cenas** - Sistēma automātiski ielādē aktuālās cenas no ES Agri-food Data Portal kultūrām, kurām ir pieejami publiski tirgus dati (piemēram, kvieši, mieži, auzas). Šīs cenas tiek atjauninātas regulāri un atspoguļo reālo tirgus situāciju.
-
-2. **Lokālās cenas** - Kultūrām, kurām nav pieejami publiski tirgus dati (piemēram, zirņi, pupas), sistēma izmanto lokālās cenas no oficiālās statistikas vai kooperatīvu vidējām cenām. Šīs cenas tiek glabātas `data/local_prices.json` failā.
-
-3. **Lokālais katalogs** - Ja nav pieejami ne ES tirgus dati, ne lokālās cenas, sistēma izmanto cenas no `data/crops.json` faila. Šīs ir noklusējuma cenas, kas tiek izmantotas kā pēdējais fallback variants.
-
-Sistēma vienmēr cenšas izmantot visaktuālākos datus, bet nekad nekrīt, ja ārējie avoti nav pieejami - tādā gadījumā tiek izmantotas lokālās vērtības.
-
-## Kultūru cenas
-
-- Sistēma atbalsta plašu kultūru klāstu (graudaugi, pākšaugi, eļļaugi, sakņaugi, zālāji u.c.).
-- Kultūrām ar publiskiem tirgus datiem izmanto ES cenas.
-- Pārējām tiek izmantotas lokālās vai proxy cenas (no līdzīgām kultūrām).
-- Cenu avots vienmēr tiek parādīts lietotājam (ES tirgus, lokāls vai proxy), lai būtu skaidrs, no kurienes nāk dati.
-
-## Funkcijas
-
-- Lauku pārvaldība
 - Sējumu vēstures ievade
-- Kultūru ieteikumi balstīti uz:
+- Rotācijas noteikumu ievērošana
+- Ieteikumi nākamajam gadam
+
+### Kultūru ieteikumi
+
+- Ieteikumi balstīti uz:
   - Augsnes veidu
   - Sējumu vēsturi (rotācija)
   - Peļņas aprēķiniem
@@ -217,7 +141,105 @@ Sistēma vienmēr cenšas izmantot visaktuālākos datus, bet nekad nekrīt, ja 
 - Peļņas prognozes (3 gadi)
 - Scenāriju analīze
 
-## Deploy uz Render
+### Kultūru katalogs
+
+- Plašs kultūru klāsts
+- Cenu informācija no ES tirgus datiem
+- Favorītu sistēma
+
+### Lietotāju autentifikācija
+
+- Droša reģistrācija un pieslēgšanās
+- Datu izolācija starp lietotājiem
+
+### Darbs gan lokāli, gan tiešsaistē
+
+- Lokāla izmantošana ar SQLite
+- Deploy uz Streamlit Cloud ar PostgreSQL
+
+## 🗃️ Datu glabāšana
+
+### Lokāli (development)
+
+**SQLite datubāze:**
+- `data/farm.db`
+
+### Production vide
+
+- Ja ir iestatīts `DATABASE_URL`, sistēma automātiski izmanto PostgreSQL
+- Ja nav – tiek izmantots SQLite kā fallback
+
+## ☁️ Deploy uz Streamlit Cloud
+
+### Priekšnosacījumi
+
+- GitHub repozitorijs
+- Streamlit Cloud konts
+- (ieteicams) PostgreSQL datubāze
+
+### Soļi
+
+1. **Streamlit Cloud → New app**
+2. **Izvēlieties GitHub repo un branch**
+3. **Main file:**
+   ```
+   app.py
+   ```
+4. **Secrets (Settings → Secrets):**
+   ```toml
+   DB_URL = "postgresql://user:password@host:port/database"
+   ```
+5. **Deploy**
+
+Pēc veiksmīga deploy jūs saņemsiet publisku URL.
+
+## 📁 Projekta struktūra
+
+```
+app.py                  # Galvenā Streamlit aplikācija
+src/
+ ├── auth.py             # Autentifikācija
+ ├── models.py           # Datu modeļi
+ ├── storage.py          # Datu glabāšana
+ ├── planner.py          # Plānošanas loģika
+ ├── market_prices.py    # EC agridata integrācija
+ ├── price_provider.py   # Cenu piegādātājs
+ ├── profit.py           # Peļņas aprēķini
+ ├── analytics.py        # Analītika
+ └── ...
+data/
+ ├── crops.json          # Kultūru katalogs
+ ├── crops_csp.json      # CSP kultūras
+ ├── prices_lv.csv       # Lokālās cenas
+ └── farm.db             # SQLite datubāze
+scripts/
+ └── test_prices.py      # Testa skripti
+requirements.txt         # Python atkarības
+```
+
+## 🔧 Cenu dati
+
+Sistēma izmanto vairākus cenu avotus, lai nodrošinātu precīzus peļņas aprēķinus:
+
+1. **ES tirgus cenas** - Automātiski ielādē aktuālās cenas no ES Agri-food Data Portal kultūrām, kurām ir pieejami publiski tirgus dati (piemēram, kvieši, mieži, auzas).
+
+2. **Lokālās cenas** - Kultūrām, kurām nav pieejami publiski tirgus dati (piemēram, zirņi, pupas), sistēma izmanto lokālās cenas no oficiālās statistikas vai kooperatīvu vidējām cenām.
+
+3. **Lokālais katalogs** - Ja nav pieejami ne ES tirgus dati, ne lokālās cenas, sistēma izmanto cenas no `data/crops.json` faila.
+
+Sistēma vienmēr cenšas izmantot visaktuālākos datus, bet nekad nekrīt, ja ārējie avoti nav pieejami - tādā gadījumā tiek izmantotas lokālās vērtības.
+
+## 📝 Testa skripti
+
+### Cenu testa skripts
+
+Testē EC Agri-food Data Portal cenu ielādi:
+
+```bash
+python scripts/test_prices.py
+```
+
+## 🚀 Deploy uz Render
 
 Projektu var izvietot uz Render kā Docker Web Service.
 
@@ -228,101 +250,21 @@ Projektu var izvietot uz Render kā Docker Web Service.
 
 ### Deploy soļi
 
-1. **Pieslēdziet GitHub repozitoriju Render:**
-   - Ielogojieties Render dashboard
-   - Noklikšķiniet "New +" un izvēlieties "Web Service"
-   - Izvēlieties "Connect GitHub" un autorizējiet Render piekļuvi jūsu GitHub kontam
-   - Izvēlieties repozitoriju ar šo projektu
-
-2. **Izveidojiet PostgreSQL datubāzi:**
-   - Render dashboard, noklikšķiniet "New +" un izvēlieties "PostgreSQL"
-   - Izvēlieties bez maksas plānu
-   - Pēc izveides, Render automātiski izveidos `DATABASE_URL` vides mainīgo
-
-3. **Konfigurējiet Docker deploy:**
-   - Render automātiski atpazīs Dockerfile un izmantos Docker deploy
-   - Ja nepieciešams, manuāli norādiet "Docker" kā Environment
-   - Render automātiski izveidos Docker image no Dockerfile
-
+1. **Pieslēdziet GitHub repozitoriju Render**
+2. **Izveidojiet PostgreSQL datubāzi**
+3. **Konfigurējiet Docker deploy**
 4. **Iestatījumi:**
    - **Name:** Jebkurš vēlamais nosaukums
    - **Region:** Izvēlieties tuvāko reģionu
-   - **Branch:** `main` vai `master` (atkarībā no jūsu repo)
-   - **Root Directory:** Atstājiet tukšu (ja projekts repo saknē)
-   - **Dockerfile Path:** `Dockerfile` (noklusējuma vērtība)
-   - **Docker Context:** `.` (punkts, kas nozīmē pašreizējo direktoriju)
-
+   - **Branch:** `main` vai `master`
+   - **Dockerfile Path:** `Dockerfile`
 5. **Environment Variables:**
-   - **`DATABASE_URL`** - Render automātiski pievieno šo mainīgo, kad izveidojat PostgreSQL datubāzi. Nav nepieciešams manuāli pievienot.
+   - **`DATABASE_URL`** - Render automātiski pievieno šo mainīgo
    - **`PORT`** - Render automātiski nodrošina šo mainīgo
-   - **`FARM_ADMIN_USER`** (opcionāli) - Admin lietotājvārds pirmajam lietotājam
-   - **`FARM_ADMIN_PASS`** (opcionāli) - Admin parole pirmajam lietotājam
+6. **Deploy**
 
-6. **Pievienojiet DATABASE_URL Web Service:**
-   - Web Service iestatījumos, noklikšķiniet "Environment"
-   - Pievienojiet `DATABASE_URL` no PostgreSQL datubāzes (Render automātiski piedāvā to pievienot)
-   - Vai arī manuāli kopējiet `DATABASE_URL` no PostgreSQL datubāzes iestatījumiem
+Pēc veiksmīga deploy, jūs saņemsiet URL, kurā aplikācija būs pieejama.
 
-7. **Deploy:**
-   - Noklikšķiniet "Create Web Service"
-   - Render sāks būvēt Docker image un deploy aplikāciju
-   - Pēc veiksmīga deploy, jūs saņemsiet URL, kurā aplikācija būs pieejama
+## 📄 Licences
 
-### Datu glabāšana
-
-Sistēma automātiski izmanto PostgreSQL, ja `DATABASE_URL` vides mainīgais ir iestatīts:
-
-- **Render (production):** Render automātiski nodrošina `DATABASE_URL` no PostgreSQL datubāzes. Sistēma automātiski izmanto PostgreSQL.
-- **Lokāli (development):** Ja `DATABASE_URL` nav iestatīts, sistēma izmanto SQLite kā fallback (`data/farm.db`).
-
-### Svarīgi iestatījumi Dockerfile
-
-- **`--server.address=0.0.0.0`** - Nepieciešams, lai Streamlit aplikācija būtu pieejama no ārējām saites. Noklusējuma vērtība `localhost` darbojas tikai lokāli.
-
-- **`--server.port=${PORT}`** - Render automātiski nodrošina `PORT` vides mainīgo, kas norāda, uz kura porta jāklausās. Dockerfile izmanto šo mainīgo, lai aplikācija darbojas uz pareizā porta.
-
-- **`--server.headless=true`** - Neatver pārlūkprogrammu automātiski, kas ir nepieciešams servera vidē.
-
-### Pēc deploy
-
-- Render automātiski atjaunos aplikāciju, kad veiksiet push uz GitHub
-- Logs ir pieejami Render dashboard
-- Ja nepieciešams, varat konfigurēt custom domain
-- Visi dati tiek glabāti PostgreSQL datubāzē
-
-## Deploy uz Streamlit Cloud
-
-Projektu var izvietot uz Streamlit Cloud.
-
-### Priekšnosacījumi
-
-1. GitHub repozitorijs ar projektu
-2. Streamlit Cloud konts (bez maksas plāns pieejams)
-3. PostgreSQL datubāze (Render, Supabase, vai cita)
-
-### Deploy soļi
-
-1. **Pieslēdziet GitHub repozitoriju Streamlit Cloud:**
-   - Ielogojieties Streamlit Cloud
-   - Noklikšķiniet "New app"
-   - Izvēlieties repozitoriju un branch
-
-2. **Konfigurējiet secrets:**
-   - Streamlit Cloud dashboard, noklikšķiniet uz jūsu aplikācijas
-   - Izvēlieties "Settings" → "Secrets"
-   - Pievienojiet:
-     ```toml
-     DB_URL = "postgresql://user:password@host:port/database"
-     ```
-
-3. **Deploy:**
-   - Streamlit Cloud automātiski izveidos aplikāciju
-   - Pēc veiksmīga deploy, jūs saņemsiet URL
-
-### Piezīmes
-
-- Pirmā deploy var aizņemt vairākas minūtes, kamēr tiek būvēts Docker image
-- Bez maksas plāns var ietvert ierobežojumus (piemēram, aplikācija "aizmieg" pēc neaktivitātes)
-- PostgreSQL datubāze tiek automātiski izmantota, ja `DATABASE_URL` ir iestatīts
-- Lokāli var izmantot SQLite vai arī lokālu PostgreSQL, iestatot `DATABASE_URL` vides mainīgo
-
+Šis projekts ir izstrādāts kā mācību noslēguma projekts.

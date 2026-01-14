@@ -28,7 +28,12 @@ def get_database_url() -> Optional[str]:
     Returns:
         DATABASE_URL string vai None, ja nav iestatīts vai nav derīgs
     """
-    # Mēģina iegūt no Streamlit secrets (Streamlit Cloud)
+    # Vispirms pārbauda vides mainīgo (ātrāk, nav jāgaida Streamlit)
+    url = os.environ.get('DATABASE_URL')
+    if url and _is_valid_database_url(url):
+        return url
+    
+    # Tikai tad mēģina piekļūt st.secrets (var bloķēt, ja Streamlit nav inicializēts)
     try:
         import streamlit as st
         if hasattr(st, 'secrets') and 'DB_URL' in st.secrets:
@@ -36,12 +41,8 @@ def get_database_url() -> Optional[str]:
             if url and _is_valid_database_url(url):
                 return url
     except Exception:
+        # Ignorēt kļūdas, ja Streamlit nav inicializēts vai secrets nav pieejams
         pass
-    
-    # Fallback uz vides mainīgo
-    url = os.environ.get('DATABASE_URL')
-    if url and _is_valid_database_url(url):
-        return url
     
     return None
 
@@ -139,7 +140,8 @@ def get_connection() -> DBConnection:
     else:
         # SQLite (fallback)
         db_path = "data/farm.db"
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        db_dir = Path(db_path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
         return sqlite3.connect(db_path)
 
 
