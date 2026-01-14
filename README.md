@@ -152,10 +152,9 @@ Sistēma izmanto lokālu autentifikāciju ar lietotājvārdu un paroli.
 - Droša reģistrācija un pieslēgšanās
 - Datu izolācija starp lietotājiem
 
-### Darbs gan lokāli, gan tiešsaistē
+### Darbs lokāli
 
-- Lokāla izmantošana ar SQLite
-- Deploy uz Streamlit Cloud ar PostgreSQL
+- Lokāla izmantošana ar SQLite datubāzi
 
 ## 🗃️ Datu glabāšana
 
@@ -168,30 +167,6 @@ Sistēma izmanto lokālu autentifikāciju ar lietotājvārdu un paroli.
 
 - Ja ir iestatīts `DATABASE_URL`, sistēma automātiski izmanto PostgreSQL
 - Ja nav – tiek izmantots SQLite kā fallback
-
-## ☁️ Deploy uz Streamlit Cloud
-
-### Priekšnosacījumi
-
-- GitHub repozitorijs
-- Streamlit Cloud konts
-- (ieteicams) PostgreSQL datubāze
-
-### Soļi
-
-1. **Streamlit Cloud → New app**
-2. **Izvēlieties GitHub repo un branch**
-3. **Main file:**
-   ```
-   app.py
-   ```
-4. **Secrets (Settings → Secrets):**
-   ```toml
-   DB_URL = "postgresql://user:password@host:port/database"
-   ```
-5. **Deploy**
-
-Pēc veiksmīga deploy jūs saņemsiet publisku URL.
 
 ## 📁 Projekta struktūra
 
@@ -238,32 +213,6 @@ Testē EC Agri-food Data Portal cenu ielādi:
 ```bash
 python scripts/test_prices.py
 ```
-
-## 🚀 Deploy uz Render
-
-Projektu var izvietot uz Render kā Docker Web Service.
-
-### Priekšnosacījumi
-
-1. GitHub repozitorijs ar projektu
-2. Render konts (bez maksas plāns pieejams)
-
-### Deploy soļi
-
-1. **Pieslēdziet GitHub repozitoriju Render**
-2. **Izveidojiet PostgreSQL datubāzi**
-3. **Konfigurējiet Docker deploy**
-4. **Iestatījumi:**
-   - **Name:** Jebkurš vēlamais nosaukums
-   - **Region:** Izvēlieties tuvāko reģionu
-   - **Branch:** `main` vai `master`
-   - **Dockerfile Path:** `Dockerfile`
-5. **Environment Variables:**
-   - **`DATABASE_URL`** - Render automātiski pievieno šo mainīgo
-   - **`PORT`** - Render automātiski nodrošina šo mainīgo
-6. **Deploy**
-
-Pēc veiksmīga deploy, jūs saņemsiet URL, kurā aplikācija būs pieejama.
 
 ## 📄 Licences
 
